@@ -32,9 +32,11 @@ export function Layout() {
       <header className="bg-gradient-dark border-b border-purple-500/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform">
-              <span className="text-white font-bold text-xl">✨</span>
-            </div>
+            <img 
+              src="/astrix-logo.svg" 
+              alt="Astrix AI Logo" 
+              className="w-10 h-10 group-hover:scale-105 transition-transform drop-shadow-lg"
+            />
             <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-primary">Astrix AI</h1>
           </Link>
 

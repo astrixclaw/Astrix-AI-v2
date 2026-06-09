@@ -63,19 +63,28 @@ export function Dashboard() {
 
   return (
     <div className="space-y-12">
-      {/* Welcome Section */}
+      {/* Welcome Section with Logo */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="space-y-2"
+        className="space-y-4"
       >
-        <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-primary">
-          Welcome back, {user?.username}!
-        </h1>
-        <p className="text-gray-400 text-lg">
-          Your intelligent assistant is ready to help. Choose what you'd like to do.
-        </p>
+        <div className="flex items-center gap-4">
+          <img 
+            src="/astrix-logo.svg" 
+            alt="Astrix AI Logo" 
+            className="w-12 h-12 drop-shadow-lg"
+          />
+          <div>
+            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-primary">
+              Welcome back, {user?.username}!
+            </h1>
+            <p className="text-gray-400 text-lg">
+              Your intelligent assistant is ready to help. Choose what you'd like to do.
+            </p>
+          </div>
+        </div>
       </motion.div>
 
       {/* Quick Stats */}

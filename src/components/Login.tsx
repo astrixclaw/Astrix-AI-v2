@@ -32,9 +32,11 @@ export function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-primary rounded-2xl mb-6">
-            <span className="text-white text-4xl">✨</span>
-          </div>
+          <img 
+            src="/astrix-logo.svg" 
+            alt="Astrix AI Logo" 
+            className="w-24 h-24 mx-auto mb-6 drop-shadow-2xl"
+          />
           <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-primary mb-2">Astrix AI</h1>
           <p className="text-gray-400">Your intelligent desktop assistant</p>
         </div>
