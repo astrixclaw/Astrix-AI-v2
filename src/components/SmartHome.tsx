@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useSmartHome } from '@hooks/useSmartHome'
 import toast from 'react-hot-toast'
-import { FiLoader, FiBulb, FiPower } from 'react-icons/fi'
+import { FiLoader, FiPower } from 'react-icons/fi'
 import { motion } from 'framer-motion'
 import type { HueLight } from '@types/index'
 
@@ -107,7 +107,7 @@ export function SmartHome() {
                         : 'bg-gray-600/20 text-gray-400'
                     }`}
                   >
-                    <FiBulb size={24} />
+                    <span>💡</span>
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white">{light.name}</h3>
@@ -171,7 +171,7 @@ export function SmartHome() {
           className="text-center py-16"
         >
           <div className="w-20 h-20 bg-gradient-subtle rounded-full flex items-center justify-center mx-auto mb-4 border border-purple-500/30">
-            <FiBulb className="text-purple-400" size={40} />
+            <span className="text-4xl">💡</span>
           </div>
           <h3 className="text-xl font-semibold text-white mb-2">No devices found</h3>
           <p className="text-gray-400 mb-6">

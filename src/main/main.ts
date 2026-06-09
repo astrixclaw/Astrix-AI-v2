@@ -21,11 +21,10 @@ async function createWindow() {
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
-      enableRemoteModule: false,
       nodeIntegration: false,
       sandbox: true,
     },
-    icon: path.join(__dirname, '../../public/icon.png'),
+    icon: path.join(__dirname, '../../public/astrix-logo.svg'),
   })
 
   const startUrl = isDev

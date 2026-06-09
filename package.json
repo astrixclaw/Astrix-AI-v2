@@ -8,9 +8,9 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dev:vite": "vite",
-    "build": "tsc && vite build && electron-builder",
-    "build:preload": "tsc src/main/preload.ts --outDir dist/main --declaration",
-    "build:main": "tsc src/main/main.ts --outDir dist/main --declaration",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer && npm run dist",
+    "build:preload": "tsc -p tsconfig.main.json",
+    "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
     "dist": "electron-builder",
     "type-check": "tsc --noEmit"
