@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #a080ff;
+  --color-secondary: #ff8040;
+  --color-accent: #5820e0;
+}
+
+* {
+  @apply scroll-smooth;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-gradient-dark text-white font-sans antialiased;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  @apply w-2;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-purple-600/40 rounded-full hover:bg-purple-600/60;
+}
+
+/* Input Focus Styles */
+input:focus,
+textarea:focus,
+select:focus {
+  @apply outline-none;
+}
+
+/* Gradient Text */
+.gradient-text {
+  @apply text-transparent bg-clip-text bg-gradient-primary;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Utility Classes */
+.glass {
+  @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-lg;
+}
+
+.card {
+  @apply bg-gradient-subtle border border-purple-500/30 rounded-xl p-6;
+}
+
+.btn-primary {
+  @apply px-4 py-2 bg-gradient-primary text-white rounded-lg font-semibold hover:shadow-lg hover:shadow-purple-500/50 transition-all active:scale-95;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-white/10 text-white rounded-lg font-semibold hover:bg-white/20 transition-all active:scale-95;
+}
+
+/* Range Input Styling */
+input[type='range'] {
+  @apply accent-purple-500;
+}
+
+/* Pulse Animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

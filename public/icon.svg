@@ -1,0 +1,33 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a080ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff8040;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="128" fill="url(#grad)"/>
+  
+  <!-- Star/asterisk shape for Astrix -->
+  <g fill="white" opacity="0.95">
+    <!-- Vertical line -->
+    <rect x="120" y="50" width="16" height="156" rx="8"/>
+    
+    <!-- Horizontal line -->
+    <rect x="50" y="120" width="156" height="16" rx="8"/>
+    
+    <!-- Diagonal 1 -->
+    <g opacity="0.8">
+      <rect x="50" y="50" width="16" height="156" rx="8" transform="rotate(45 128 128)"/>
+    </g>
+    
+    <!-- Diagonal 2 -->
+    <g opacity="0.8">
+      <rect x="190" y="50" width="16" height="156" rx="8" transform="rotate(-45 128 128)"/>
+    </g>
+  </g>
+  
+  <!-- Center circle highlight -->
+  <circle cx="128" cy="128" r="20" fill="white" opacity="0.3"/>
+</svg>

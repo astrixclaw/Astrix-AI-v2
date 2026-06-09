@@ -1,0 +1,67 @@
+{
+  "name": "astrix-ai-v2",
+  "version": "2.0.0",
+  "description": "Astrix AI v2 - Windows Desktop Application",
+  "main": "dist/main/main.js",
+  "homepage": "./",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev:vite": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "build:preload": "tsc src/main/preload.ts --outDir dist/main --declaration",
+    "build:main": "tsc src/main/main.ts --outDir dist/main --declaration",
+    "build:renderer": "vite build",
+    "dist": "electron-builder",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.20.0",
+    "zustand": "^4.4.0",
+    "jotai": "^2.6.0",
+    "framer-motion": "^10.16.0",
+    "clsx": "^2.0.0",
+    "react-hot-toast": "^2.4.0",
+    "react-icons": "^4.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.0",
+    "concurrently": "^8.2.0",
+    "wait-on": "^7.0.0",
+    "tailwindcss": "^3.3.0",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
+  },
+  "build": {
+    "appId": "com.astrixai.v2",
+    "productName": "Astrix AI",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
