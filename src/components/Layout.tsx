@@ -20,7 +20,9 @@ export function Layout() {
   const navItems = [
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Chat', path: '/chat' },
+    { label: 'Group Chat', path: '/group-chat' },
     { label: 'Smart Home', path: '/smart-home' },
+    { label: 'Security', path: '/security' },
     ...(user.role === 'admin' ? [{ label: 'Admin', path: '/admin' }] : []),
   ]
 
