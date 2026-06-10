@@ -37,9 +37,13 @@ export class GatewayError extends Error {
   }
 }
 
+export type GatewayContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export interface GatewayMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | GatewayContentPart[];
 }
 
 export interface StreamChunk {
@@ -63,7 +67,7 @@ function modelFor(agent: string): string {
 export async function* streamChatTurn(opts: {
   username: string;
   history: GatewayMessage[];
-  newUserMessage: string;
+  newUserMessage: string | GatewayContentPart[];
   signal?: AbortSignal;
 }): AsyncGenerator<StreamChunk, void, void> {
   const cfg = getGatewayConfig();
@@ -80,6 +84,7 @@ export async function* streamChatTurn(opts: {
     ...opts.history,
     { role: "user", content: opts.newUserMessage },
   ];
+
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

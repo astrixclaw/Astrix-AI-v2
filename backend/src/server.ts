@@ -15,6 +15,7 @@ import { avatarRoutes } from "./routes/avatars.js";
 import { chatRoutes } from "./routes/chat.js";
 import { groupChatRoutes } from "./routes/group_chat.js";
 import { lightingRoutes } from "./routes/lighting.js";
+import { purgeOrphanAttachments } from "./services/attachments.js";
 import { purgeExpiredSessions } from "./services/auth.js";
 
 const PORT = Number(process.env.PORT ?? 18800);
@@ -48,8 +49,10 @@ app.addContentTypeParser(
 await app.register(cors, { origin: true, credentials: false });
 
 await app.register(websocket);
+// 9 MB ceiling covers both 5 MB avatars and 8 MB chat attachments; per-route
+// code enforces tighter limits as it streams.
 await app.register(multipart, {
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 9 * 1024 * 1024, files: 1 },
 });
 
 // Accept raw image bodies for the avatar upload route. Each MIME we want to
@@ -71,9 +74,12 @@ await app.register(adminRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
 
-// Cleanup loop: prune expired sessions every 5 minutes.
+// Cleanup loop: prune expired sessions every 5 minutes; orphan attachments
+// (uploaded but never linked to a message) every 15 minutes.
 const purgeTimer = setInterval(purgeExpiredSessions, 5 * 60 * 1000);
 purgeTimer.unref();
+const orphanTimer = setInterval(purgeOrphanAttachments, 15 * 60 * 1000);
+orphanTimer.unref();
 
 // Never crash the whole process on a stray exception or rejection. The SSE
 // chat route used to die on socket-write-after-close; this is the final safety

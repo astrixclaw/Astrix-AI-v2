@@ -67,4 +67,18 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  conv_id       TEXT NOT NULL,
+  message_id    TEXT,
+  mime          TEXT NOT NULL,
+  size          INTEGER NOT NULL,
+  original_name TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_conv ON attachments(user_id, conv_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_msg ON attachments(message_id);
 `;
