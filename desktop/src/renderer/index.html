@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content-Security-Policy.
+        default-src 'self'            — file:// origin in production
+        connect-src ... ws/wss        — backend HTTP + WebSocket on the LAN
+        img-src 'self' data: blob: http: https:
+                                      — avatars, future inline images
+        style-src 'self' 'unsafe-inline'
+                                      — Vite hashed styles + style props
+        script-src 'self'             — only our compiled bundles
+      Main process strips Electron's stricter injected header so this wins.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' http: https: ws: wss:; img-src 'self' data: blob: http: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self';"
+    />
+    <title>Astrix Home</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>
