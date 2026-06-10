@@ -1,6 +1,6 @@
 {
   "name": "astrix-home",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Astrix Home — household AI assistant, multi-user, Hue + group chat.",
   "private": true,
   "author": "Si & Astrix",
@@ -17,7 +17,10 @@
     "package": "npm run build && electron-builder --win",
     "package:dir": "npm run build && electron-builder --win --dir"
   },
-  "dependencies": {},
+  "dependencies": {
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
   "devDependencies": {
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.5",

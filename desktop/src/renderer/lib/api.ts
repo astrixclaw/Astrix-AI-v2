@@ -8,6 +8,7 @@
  */
 import type {
   AdminUserView,
+  AttachmentSummary,
   ChatMessage,
   ChatStreamEvent,
   ConversationSummary,
@@ -205,6 +206,38 @@ export const api = {
   deleteUserAvatar: (id: string) =>
     request<{ ok: true }>(`/api/admin/users/${id}/avatar`, { method: "DELETE" }),
 
+  // ---- attachments ----
+  uploadAttachment: async (
+    convId: string,
+    file: File,
+  ): Promise<AttachmentSummary> => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const headers: Record<string, string> = {};
+    if (_token) headers.Authorization = `Bearer ${_token}`;
+    const res = await fetch(
+      `${_baseUrl}/api/conversations/${convId}/attachments`,
+      { method: "POST", headers, body: fd },
+    );
+    if (!res.ok) {
+      let code = `http_${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: string };
+        if (j?.error) code = j.error;
+      } catch { /* ignore */ }
+      throw new ApiError(code, res.status);
+    }
+    return (await res.json()) as AttachmentSummary;
+  },
+  attachmentUrl: (id: string): string => `${_baseUrl}/api/attachments/${id}`,
+  getAttachmentAuthorized: async (id: string): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    if (_token) headers.Authorization = `Bearer ${_token}`;
+    const res = await fetch(`${_baseUrl}/api/attachments/${id}`, { headers });
+    if (!res.ok) throw new ApiError(`http_${res.status}`, res.status);
+    return await res.blob();
+  },
+
   // ---- group chat ----
   listGroupMessages: (limit = 50, before?: number) => {
     const q = new URLSearchParams({ limit: String(limit) });
@@ -266,6 +299,7 @@ async function uploadAvatar(
 export async function* streamChatMessage(
   convId: string,
   text: string,
+  attachmentIds: string[] = [],
   signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent, void, void> {
   const headers: Record<string, string> = {
@@ -279,7 +313,7 @@ export async function* streamChatMessage(
     {
       method: "POST",
       headers,
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, attachment_ids: attachmentIds }),
       signal,
     },
   );

@@ -25,12 +25,22 @@ import {
   useRef,
   useState,
 } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "../components/Button";
 import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
 import { api, streamChatMessage } from "../lib/api";
 import { hasPermission } from "../lib/perms";
-import type { ChatMessage, ConversationSummary } from "@shared/types";
+import type {
+  AttachmentSummary,
+  ChatMessage,
+  ConversationSummary,
+} from "@shared/types";
+
+const MAX_ATTACHMENTS = 4;
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const ACCEPTED = "image/png,image/jpeg,image/webp,.txt,.md,.json,.log";
 
 export function Chat() {
   const { user, permissions } = useAuth();
@@ -44,6 +54,11 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Staged files queued for the next send (one row per uploaded file).
+  const [staged, setStaged] = useState<AttachmentSummary[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -103,14 +118,66 @@ export function Chat() {
     };
   }, [currentId]);
 
+  // ---- attachment helpers ----------------------------------------------
+  const ensureConv = useCallback(async (): Promise<string> => {
+    if (currentId) return currentId;
+    const { id } = await api.newConversation();
+    setCurrentId(id);
+    setMessages([]);
+    void refreshConvList();
+    return id;
+  }, [currentId, refreshConvList]);
+
+  const handleFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+      if (staged.length + list.length > MAX_ATTACHMENTS) {
+        setError(`Up to ${MAX_ATTACHMENTS} files per message.`);
+        return;
+      }
+      const oversized = list.find((f) => f.size > MAX_FILE_BYTES);
+      if (oversized) {
+        setError(`"${oversized.name}" is over the 8 MB limit.`);
+        return;
+      }
+      setError(null);
+      setUploading(true);
+      try {
+        const convId = await ensureConv();
+        for (const file of list) {
+          try {
+            const att = await api.uploadAttachment(convId, file);
+            setStaged((prev) => [...prev, att]);
+          } catch (e) {
+            setError(prettyError(
+              e instanceof Error ? e.message.replace(/^api_/, "") : "upload_failed",
+            ));
+            break;
+          }
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    [staged, ensureConv],
+  );
+
+  const removeStaged = useCallback((id: string) => {
+    setStaged((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   // ---- send ------------------------------------------------------------
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || !currentId || sending) return;
+    if ((!text && staged.length === 0) || sending) return;
+    const convId = currentId ?? (await ensureConv());
 
     setError(null);
     setSending(true);
     setInput("");
+    const attachmentsForTurn = staged;
+    setStaged([]);
 
     // Optimistic user bubble. Real id arrives via "user_saved".
     const tempUserId = `temp-user-${Date.now()}`;
@@ -118,10 +185,11 @@ export function Chat() {
       ...prev,
       {
         id: tempUserId,
-        conv_id: currentId,
+        conv_id: convId,
         role: "user",
         body: text,
         created_at: Date.now(),
+        attachments: attachmentsForTurn,
       },
     ]);
 
@@ -130,7 +198,8 @@ export function Chat() {
     setStreaming("");
 
     try {
-      for await (const event of streamChatMessage(currentId, text, ctrl.signal)) {
+      const ids = attachmentsForTurn.map((a) => a.id);
+      for await (const event of streamChatMessage(convId, text, ids, ctrl.signal)) {
         if (event.type === "user_saved") {
           // Swap the temp user message with the persisted one.
           setMessages((prev) =>
@@ -158,7 +227,7 @@ export function Chat() {
       setSending(false);
       abortRef.current = null;
     }
-  }, [currentId, input, sending, refreshConvList]);
+  }, [currentId, input, sending, staged, ensureConv, refreshConvList]);
 
   const cancelStream = useCallback(() => {
     abortRef.current?.abort();
@@ -250,6 +319,34 @@ export function Chat() {
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
+          position: "relative",
+        }}
+        onDragEnter={(e) => {
+          if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
+            e.preventDefault();
+            setDragOver(true);
+          }
+        }}
+        onDragOver={(e) => {
+          if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
+            e.preventDefault();
+          }
+        }}
+        onDragLeave={(e) => {
+          // Only clear if leaving the pane entirely
+          if (
+            e.currentTarget instanceof HTMLElement &&
+            !e.currentTarget.contains(e.relatedTarget as Node)
+          ) {
+            setDragOver(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          if (e.dataTransfer?.files?.length) {
+            void handleFiles(e.dataTransfer.files);
+          }
         }}
       >
         <div
@@ -266,6 +363,7 @@ export function Chat() {
           ) : (
             <MessageList messages={messages} streaming={streaming} />
           )}
+          {dragOver && <DragOverlay />}
         </div>
 
         {error && (
@@ -289,6 +387,10 @@ export function Chat() {
           onCancel={cancelStream}
           sending={sending}
           streaming={streaming !== null}
+          staged={staged}
+          uploading={uploading}
+          onFiles={(fs) => void handleFiles(fs)}
+          onRemoveStaged={removeStaged}
         />
       </div>
     </div>
@@ -409,7 +511,12 @@ function MessageList({
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <AnimatePresence initial={false}>
         {messages.map((m) => (
-          <Bubble key={m.id} role={m.role} body={m.body} />
+          <Bubble
+            key={m.id}
+            role={m.role}
+            body={m.body}
+            attachments={m.attachments}
+          />
         ))}
       </AnimatePresence>
       {streaming !== null && (
@@ -422,13 +529,16 @@ function MessageList({
 function Bubble({
   role,
   body,
+  attachments,
   streaming,
 }: {
   role: "user" | "assistant";
   body: string;
+  attachments?: AttachmentSummary[];
   streaming?: boolean;
 }) {
   const isUser = role === "user";
+  const showTyping = !body && streaming;
   return (
     <motion.div
       layout
@@ -447,25 +557,166 @@ function Bubble({
         color: "var(--text)",
         fontSize: 14,
         lineHeight: 1.55,
-        whiteSpace: "pre-wrap",
         wordWrap: "break-word",
       }}
     >
-      {body || (streaming ? <TypingDots /> : "")}
-      {streaming && body && (
-        <span
-          style={{
-            display: "inline-block",
-            width: 8,
-            height: 14,
-            marginLeft: 2,
-            verticalAlign: "-2px",
-            background: "var(--accent)",
-            animation: "blink 1s steps(1) infinite",
-          }}
-        />
+      {attachments && attachments.length > 0 && (
+        <AttachmentGrid attachments={attachments} />
+      )}
+      {showTyping ? (
+        <TypingDots />
+      ) : (
+        <div className="md" style={{ whiteSpace: "pre-wrap" }}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: ({ href, children }) => (
+                <a href={href} target="_blank" rel="noreferrer noopener">
+                  {children}
+                </a>
+              ),
+              code: ({ children, className }) => {
+                const isBlock = className?.startsWith("language-");
+                return isBlock ? (
+                  <pre style={codeBlockStyle}>
+                    <code>{children}</code>
+                  </pre>
+                ) : (
+                  <code style={inlineCodeStyle}>{children}</code>
+                );
+              },
+            }}
+          >
+            {body}
+          </ReactMarkdown>
+          {streaming && body && (
+            <span
+              style={{
+                display: "inline-block",
+                width: 8,
+                height: 14,
+                marginLeft: 2,
+                verticalAlign: "-2px",
+                background: "var(--accent)",
+                animation: "blink 1s steps(1) infinite",
+              }}
+            />
+          )}
+        </div>
       )}
     </motion.div>
+  );
+}
+
+const codeBlockStyle: React.CSSProperties = {
+  background: "rgba(0,0,0,0.35)",
+  borderRadius: 6,
+  padding: "0.55rem 0.75rem",
+  overflowX: "auto",
+  fontSize: 12.5,
+  lineHeight: 1.45,
+  margin: "0.4rem 0",
+};
+const inlineCodeStyle: React.CSSProperties = {
+  background: "rgba(0,0,0,0.3)",
+  padding: "0.05rem 0.35rem",
+  borderRadius: 4,
+  fontSize: 12.5,
+};
+
+function AttachmentGrid({ attachments }: { attachments: AttachmentSummary[] }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        marginBottom: 6,
+      }}
+    >
+      {attachments.map((a) =>
+        a.kind === "image" ? (
+          <img
+            key={a.id}
+            src={api.attachmentUrl(a.id)}
+            alt={a.original_name}
+            style={{
+              maxWidth: 220,
+              maxHeight: 220,
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              display: "block",
+            }}
+          />
+        ) : (
+          <div
+            key={a.id}
+            style={{
+              padding: "0.4rem 0.6rem",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.25)",
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              maxWidth: 220,
+            }}
+          >
+            <span aria-hidden>📄</span>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={a.original_name}
+            >
+              {a.original_name}
+            </span>
+            <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+              {humanSize(a.size)}
+            </span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function DragOverlay() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "rgba(122,167,255,0.10)",
+        border: "2px dashed rgba(122,167,255,0.5)",
+        borderRadius: 12,
+        display: "grid",
+        placeItems: "center",
+        pointerEvents: "none",
+        zIndex: 5,
+      }}
+    >
+      <div
+        style={{
+          padding: "0.6rem 1rem",
+          borderRadius: 8,
+          background: "rgba(0,0,0,0.5)",
+          fontSize: 13,
+          color: "var(--text)",
+        }}
+      >
+        Drop to attach (max {MAX_ATTACHMENTS}, 8 MB each)
+      </div>
+    </div>
   );
 }
 
@@ -552,6 +803,10 @@ function Composer({
   onCancel,
   sending,
   streaming,
+  staged,
+  uploading,
+  onFiles,
+  onRemoveStaged,
 }: {
   value: string;
   onChange: (s: string) => void;
@@ -559,9 +814,14 @@ function Composer({
   onCancel: () => void;
   sending: boolean;
   streaming: boolean;
+  staged: AttachmentSummary[];
+  uploading: boolean;
+  onFiles: (files: FileList | File[]) => void;
+  onRemoveStaged: (id: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
-  // Auto-grow up to ~6 lines.
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -569,50 +829,190 @@ function Composer({
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }, [value]);
 
+  const onPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files: File[] = [];
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        onFiles(files);
+      }
+    },
+    [onFiles],
+  );
+
+  const canSend = (value.trim().length > 0 || staged.length > 0) && !uploading;
+  const stagedFull = staged.length >= MAX_ATTACHMENTS;
+
   return (
     <div
       style={{
-        padding: "0.85rem 1rem",
+        padding: "0.6rem 1rem 0.85rem",
         borderTop: "1px solid var(--border)",
         background: "var(--bg-2)",
         display: "flex",
-        gap: "0.6rem",
-        alignItems: "flex-end",
+        flexDirection: "column",
+        gap: "0.5rem",
       }}
     >
-      <textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="Message Astrix… (Enter to send, Shift+Enter for newline)"
-        rows={1}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        style={{
-          flex: 1,
-          resize: "none",
-          maxHeight: 160,
-          lineHeight: 1.5,
-        }}
-      />
-      {streaming ? (
-        <Button variant="ghost" onClick={onCancel}>
-          Stop
-        </Button>
-      ) : (
-        <Button
-          variant="primary"
-          onClick={onSend}
-          loading={sending}
-          disabled={!value.trim()}
+      {staged.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+          }}
         >
-          Send
-        </Button>
+          {staged.map((a) => (
+            <StagedTile key={a.id} att={a} onRemove={() => onRemoveStaged(a.id)} />
+          ))}
+          {uploading && (
+            <div style={{ fontSize: 12, color: "var(--text-faint)", alignSelf: "center" }}>
+              uploading…
+            </div>
+          )}
+        </div>
       )}
+      <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-end" }}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={ACCEPTED}
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            if (e.target.files?.length) onFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={stagedFull || uploading}
+          title={stagedFull ? "Up to 4 files per message" : "Attach files"}
+          style={{
+            padding: "0.55rem 0.6rem",
+            borderRadius: 8,
+            background: "transparent",
+            border: "1px solid var(--border)",
+            color: stagedFull ? "var(--text-faint)" : "var(--text-dim)",
+            cursor: stagedFull || uploading ? "not-allowed" : "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+          }}
+        >
+          📎
+        </button>
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onPaste={onPaste}
+          placeholder="Message Astrix… (Enter to send, Shift+Enter for newline)"
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (canSend) onSend();
+            }
+          }}
+          style={{
+            flex: 1,
+            resize: "none",
+            maxHeight: 160,
+            lineHeight: 1.5,
+          }}
+        />
+        {streaming ? (
+          <Button variant="ghost" onClick={onCancel}>
+            Stop
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            onClick={onSend}
+            loading={sending}
+            disabled={!canSend}
+          >
+            Send
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StagedTile({
+  att,
+  onRemove,
+}: {
+  att: AttachmentSummary;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: att.kind === "image" ? 2 : "0.4rem 0.55rem",
+        borderRadius: 8,
+        border: "1px solid var(--border)",
+        background: "rgba(0,0,0,0.2)",
+        maxWidth: 200,
+      }}
+    >
+      {att.kind === "image" ? (
+        <img
+          src={api.attachmentUrl(att.id)}
+          alt={att.original_name}
+          style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6 }}
+        />
+      ) : (
+        <span aria-hidden>📄</span>
+      )}
+      <div style={{ fontSize: 12, color: "var(--text-dim)", overflow: "hidden" }}>
+        <div
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxWidth: 130,
+          }}
+          title={att.original_name}
+        >
+          {att.original_name}
+        </div>
+        <div style={{ color: "var(--text-faint)", fontSize: 10 }}>
+          {humanSize(att.size)}
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        title="Remove"
+        style={{
+          position: "absolute",
+          top: -6,
+          right: -6,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          background: "var(--bg-2)",
+          border: "1px solid var(--border)",
+          color: "var(--text)",
+          fontSize: 10,
+          lineHeight: 1,
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -625,6 +1025,16 @@ function prettyError(code: string): string {
       return "You don't have permission to chat.";
     case "empty_message":
       return "Message can't be empty.";
+    case "unsupported_type":
+      return "That file type isn't supported. Try PNG/JPEG/WebP, or .txt/.md/.json/.log.";
+    case "file_too_large":
+      return "File is too big (8 MB max).";
+    case "too_many_staged_files":
+      return "Up to 4 files per message.";
+    case "bad_image":
+      return "That image couldn't be processed.";
+    case "bad_attachments":
+      return "Attachment is no longer valid — please re-upload.";
     default:
       return code.replace(/_/g, " ");
   }

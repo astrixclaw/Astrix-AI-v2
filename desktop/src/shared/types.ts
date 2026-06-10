@@ -46,12 +46,21 @@ export interface ConversationSummary {
   message_count: number;
 }
 
+export interface AttachmentSummary {
+  id: string;
+  mime: string;
+  size: number;
+  original_name: string;
+  kind: "image" | "text";
+}
+
 export interface ChatMessage {
   id: string;
   conv_id: string;
   role: "user" | "assistant";
   body: string;
   created_at: number;
+  attachments?: AttachmentSummary[];
 }
 
 /** SSE event payloads from POST /api/conversations/:id/messages. */
