@@ -78,6 +78,18 @@ export interface GatewayConfig {
   agent: string;
 }
 
+// ---- Hue pairing -------------------------------------------------------
+
+export interface HueBridgeCandidate {
+  ip: string;
+  id: string;
+}
+
+export interface HueDiscoverResult {
+  candidates: HueBridgeCandidate[];
+  hint?: string;
+}
+
 // ---- Lighting (Philips Hue) ---------------------------------------------
 
 export interface HueScene {

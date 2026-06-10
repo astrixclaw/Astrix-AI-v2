@@ -20,6 +20,7 @@ import { Button } from "../components/Button";
 import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
 import { api, ApiError } from "../lib/api";
+import { HuePairingWizard } from "./Hue";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -49,6 +50,8 @@ export function Settings() {
         />
 
         {user?.is_admin && <GatewaySection />}
+
+        {user?.is_admin && <HueSection />}
 
         <AccountSection />
       </motion.div>
@@ -390,6 +393,40 @@ function GatewaySection() {
           </div>
         </>
       )}
+    </Section>
+  );
+}
+
+// -------------------------------------------------------------------------
+
+function HueSection() {
+  const [showWizard, setShowWizard] = useState(false);
+
+  if (showWizard) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        style={{
+          background: "var(--bg-2)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          marginBottom: "1.2rem",
+          overflow: "hidden",
+        }}
+      >
+        <HuePairingWizard onDone={() => setShowWizard(false)} />
+      </motion.div>
+    );
+  }
+
+  return (
+    <Section
+      title="Philips Hue"
+      description="Manage the connection to your Hue bridge. Use 'Re-pair bridge' if lights stopped working or you replaced the bridge."
+    >
+      <Button onClick={() => setShowWizard(true)}>Re-pair bridge</Button>
     </Section>
   );
 }

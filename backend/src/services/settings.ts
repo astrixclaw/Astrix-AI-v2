@@ -24,6 +24,8 @@ export const SETTING_KEYS = {
   GATEWAY_URL: "gateway.url",
   GATEWAY_TOKEN: "gateway.token",
   GATEWAY_AGENT: "gateway.agent",
+  HUE_BRIDGE_IP: "hue_bridge.ip",
+  HUE_BRIDGE_KEY: "hue_bridge.application_key",
 } as const;
 
 function getSetting(key: string): string {
@@ -54,4 +56,21 @@ export function setGatewayConfig(patch: Partial<GatewayConfig>): GatewayConfig {
   if (patch.token !== undefined) setSetting(SETTING_KEYS.GATEWAY_TOKEN, patch.token.trim());
   if (patch.agent !== undefined) setSetting(SETTING_KEYS.GATEWAY_AGENT, patch.agent.trim());
   return getGatewayConfig();
+}
+
+export interface HueBridgeConfig {
+  ip: string;
+  applicationKey: string;
+}
+
+export function getHueBridgeConfig(): HueBridgeConfig | null {
+  const ip = getSetting(SETTING_KEYS.HUE_BRIDGE_IP);
+  const key = getSetting(SETTING_KEYS.HUE_BRIDGE_KEY);
+  if (!ip || !key) return null;
+  return { ip, applicationKey: key };
+}
+
+export function setHueBridgeConfig(cfg: HueBridgeConfig): void {
+  setSetting(SETTING_KEYS.HUE_BRIDGE_IP, cfg.ip.trim());
+  setSetting(SETTING_KEYS.HUE_BRIDGE_KEY, cfg.applicationKey.trim());
 }

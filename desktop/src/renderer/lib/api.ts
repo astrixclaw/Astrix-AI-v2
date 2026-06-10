@@ -16,6 +16,8 @@ import type {
   Feature,
   GatewayConfig,
   GroupMessage,
+  HueBridgeCandidate,
+  HueDiscoverResult,
   HueRoom,
   Permission,
   SessionInfo,
@@ -154,6 +156,15 @@ export const api = {
     request<GatewayConfig>("/api/admin/gateway"),
   setGatewayConfig: (patch: Partial<GatewayConfig>) =>
     request<GatewayConfig>("/api/admin/gateway", { method: "PATCH", body: patch }),
+
+  // ---- hue pairing (admin) ----
+  discoverHue: () =>
+    request<HueDiscoverResult>("/api/admin/hue/discover", { method: "POST" }),
+  pairHue: (ip: string) =>
+    request<{ applicationKey?: string; pending?: boolean }>("/api/admin/hue/pair", {
+      method: "POST",
+      body: { ip },
+    }),
 
   // ---- lighting ----
   listRooms: () => request<{ rooms: HueRoom[] }>("/api/lighting/rooms"),

@@ -21,6 +21,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Agent, fetch as undiciFetch } from "undici";
+import { getHueBridgeConfig } from "./settings.js";
 
 const SECRETS_PATH =
   process.env.HUE_SECRETS_PATH ??
@@ -31,16 +32,22 @@ interface HueSecrets {
   applicationKey: string;
 }
 
-let secrets: HueSecrets | null = null;
-
+/**
+ * Load credentials: DB settings row takes precedence, then fall back to
+ * the legacy ~/.openclaw/secrets/hue.json so existing pairings keep working
+ * without requiring a re-pair.
+ */
 function loadSecrets(): HueSecrets | null {
-  if (secrets) return secrets;
+  // 1. Check DB settings (written by the pairing wizard).
+  const dbCfg = getHueBridgeConfig();
+  if (dbCfg) return { bridgeIp: dbCfg.ip, applicationKey: dbCfg.applicationKey };
+
+  // 2. Fall back to secrets file.
   if (!existsSync(SECRETS_PATH)) return null;
   try {
     const data = JSON.parse(readFileSync(SECRETS_PATH, "utf8"));
     if (!data.bridgeIp || !data.applicationKey) return null;
-    secrets = { bridgeIp: data.bridgeIp, applicationKey: data.applicationKey };
-    return secrets;
+    return { bridgeIp: data.bridgeIp, applicationKey: data.applicationKey };
   } catch {
     return null;
   }

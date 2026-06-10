@@ -34,8 +34,10 @@ import {
 import {
   getGatewayConfig,
   setGatewayConfig,
+  setHueBridgeConfig,
   type GatewayConfig,
 } from "../services/settings.js";
+import { Agent, fetch as undiciFetch } from "undici";
 
 // ---- gateway helpers --------------------------------------------------
 
@@ -248,6 +250,118 @@ export async function adminRoutes(app: FastifyInstance) {
         );
       }
       return { user: viewWithPerms(target) };
+    },
+  );
+
+  // -------- Hue bridge: discover ----------------------------------------
+
+  /**
+   * Try to find Hue bridges on the LAN.
+   * 1. meethue.com N-UPnP endpoint (fastest, works if internet is available).
+   * 2. Manual-entry hint (always appended).
+   *
+   * Returns { candidates: [{ ip, id }] }.
+   */
+  app.post("/api/admin/hue/discover", { preHandler: requireAdmin }, async (_req, reply) => {
+    const candidates: { ip: string; id: string }[] = [];
+
+    // ---- meethue.com N-UPnP ----
+    try {
+      const res = await undiciFetch("https://discovery.meethue.com/", {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { internalipaddress?: string; id?: string }[];
+        if (Array.isArray(data)) {
+          for (const entry of data) {
+            if (entry.internalipaddress) {
+              candidates.push({
+                ip: entry.internalipaddress,
+                id: entry.id ?? entry.internalipaddress,
+              });
+            }
+          }
+        }
+      }
+    } catch {
+      // Network or timeout — continue to next strategy.
+    }
+
+    if (candidates.length === 0) {
+      // No candidates found — caller should offer manual entry.
+      return reply.code(200).send({ candidates, hint: "manual_entry" });
+    }
+
+    return reply.code(200).send({ candidates });
+  });
+
+  // -------- Hue bridge: pair ----------------------------------------
+
+  /**
+   * Attempt to pair with the bridge at the given IP.
+   * - Calls POST https://<ip>/api with `{ devicetype: "AstrixHome#<hostname>" }`.
+   * - If the link button hasn't been pressed the bridge returns error type 101;
+   *   we forward `{ pending: true }` so the client can start polling.
+   * - On success we store ip + applicationKey in the settings table so
+   *   hue.ts picks it up from the DB on next load, and also invalidate the
+   *   in-memory secrets cache so the change is live immediately.
+   */
+  app.post<{ Body: { ip: string } }>(
+    "/api/admin/hue/pair",
+    { preHandler: requireAdmin },
+    async (req, reply) => {
+      const ip = String(req.body?.ip ?? "").trim();
+      if (!ip) return reply.code(400).send({ error: "ip_required" });
+
+      const hostname = (await import("node:os")).hostname();
+      const devicetype = `AstrixHome#${hostname.slice(0, 19)}`;
+
+      // The Hue v1 pairing endpoint lives at http(s)://<ip>/api.
+      // We must use undici directly so the dispatcher field is respected
+      // (Node 22 global fetch silently drops it on self-signed TLS).
+      const dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+      let body: unknown;
+      try {
+        const res = await undiciFetch(`https://${ip}/api`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ devicetype }),
+          dispatcher,
+          signal: AbortSignal.timeout(6000),
+        });
+        body = await res.json();
+      } catch (e) {
+        return reply.code(502).send({ error: "bridge_unreachable", detail: String(e) });
+      }
+
+      // Hue v1 always returns an array.
+      const arr = Array.isArray(body) ? body : [body];
+      const first = arr[0] as Record<string, unknown>;
+
+      if (first?.error) {
+        const err = first.error as Record<string, unknown>;
+        if (Number(err.type) === 101) {
+          // Link button not yet pressed.
+          return reply.code(200).send({ pending: true });
+        }
+        return reply.code(400).send({ error: "bridge_error", detail: err.description });
+      }
+
+      if (first?.success) {
+        const success = first.success as Record<string, unknown>;
+        const applicationKey = String(success.username ?? "");
+        if (!applicationKey) {
+          return reply.code(502).send({ error: "no_application_key" });
+        }
+
+        // Persist to DB.
+        setHueBridgeConfig({ ip, applicationKey });
+
+        return reply.code(200).send({ applicationKey });
+      }
+
+      return reply.code(502).send({ error: "unexpected_response", body });
     },
   );
 
