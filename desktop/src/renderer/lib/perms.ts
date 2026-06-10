@@ -23,7 +23,11 @@ export function hasPermission(
   for (const p of permissions) {
     if (p.feature !== feature) continue;
     if (resourceId === undefined) {
-      if (p.resource_id === null) return true;
+      // "Do they have *any* grant for this feature?" — wildcards AND
+      // resource-scoped grants both count, since used by sidebar tabs to
+      // decide whether the screen is reachable at all. The per-resource
+      // filter happens inside that screen.
+      return true;
     } else {
       if (p.resource_id === null || p.resource_id === resourceId) return true;
     }
