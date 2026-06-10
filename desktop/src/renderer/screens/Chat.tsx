@@ -167,6 +167,21 @@ export function Chat() {
     setStaged((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
+  const deleteMessage = useCallback(
+    async (msgId: string) => {
+      if (!currentId) return;
+      if (!window.confirm("Delete this message?")) return;
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      try {
+        await api.deleteChatMessage(currentId, msgId);
+        void refreshConvList();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "delete_failed");
+      }
+    },
+    [currentId, refreshConvList],
+  );
+
   // ---- send ------------------------------------------------------------
   const send = useCallback(async () => {
     const text = input.trim();
@@ -361,7 +376,12 @@ export function Chat() {
           {messages.length === 0 && streaming === null && !loadingConv ? (
             <EmptyState username={user?.username ?? "friend"} />
           ) : (
-            <MessageList messages={messages} streaming={streaming} />
+            <MessageList
+              messages={messages}
+              streaming={streaming}
+              meId={user?.id ?? ""}
+              onDelete={(id) => void deleteMessage(id)}
+            />
           )}
           {dragOver && <DragOverlay />}
         </div>
@@ -503,9 +523,13 @@ function ConversationRow({
 function MessageList({
   messages,
   streaming,
+  meId,
+  onDelete,
 }: {
   messages: ChatMessage[];
   streaming: string | null;
+  meId: string;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -516,6 +540,11 @@ function MessageList({
             role={m.role}
             body={m.body}
             attachments={m.attachments}
+            onDelete={
+              m.role === "user" && m.id && !m.id.startsWith("temp-")
+                ? () => onDelete(m.id)
+                : undefined
+            }
           />
         ))}
       </AnimatePresence>
@@ -531,37 +560,76 @@ function Bubble({
   body,
   attachments,
   streaming,
+  onDelete,
 }: {
   role: "user" | "assistant";
   body: string;
   attachments?: AttachmentSummary[];
   streaming?: boolean;
+  onDelete?: () => void;
 }) {
   const isUser = role === "user";
   const showTyping = !body && streaming;
+  const [hover, setHover] = useState(false);
+  const hasText = !!body && body.length > 0;
+  const hasAtt = !!attachments && attachments.length > 0;
+  const imageOnly = !hasText && hasAtt &&
+    attachments!.every((a) => a.kind === "image");
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         alignSelf: isUser ? "flex-end" : "flex-start",
         maxWidth: "75%",
-        padding: "0.7rem 1rem",
+        padding: imageOnly ? 0 : "0.7rem 1rem",
         borderRadius: "var(--radius-lg)",
-        background: isUser
-          ? "linear-gradient(135deg, rgba(122,167,255,0.22), rgba(164,139,255,0.18))"
-          : "var(--bg-2)",
-        border: "1px solid var(--border)",
+        background: imageOnly
+          ? "transparent"
+          : isUser
+            ? "linear-gradient(135deg, rgba(122,167,255,0.22), rgba(164,139,255,0.18))"
+            : "var(--bg-2)",
+        border: imageOnly ? "none" : "1px solid var(--border)",
         color: "var(--text)",
         fontSize: 14,
         lineHeight: 1.55,
         wordWrap: "break-word",
+        position: "relative",
+        overflow: "hidden",
       }}
     >
-      {attachments && attachments.length > 0 && (
-        <AttachmentGrid attachments={attachments} />
+      {hasAtt && (
+        <AttachmentGrid attachments={attachments!} compact={imageOnly} />
+      )}
+      {hover && onDelete && (
+        <button
+          onClick={onDelete}
+          title="Delete message"
+          style={{
+            position: "absolute",
+            top: -10,
+            left: -10,
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "var(--bg-2)",
+            border: "1px solid var(--border)",
+            color: "var(--text-dim)",
+            fontSize: 11,
+            lineHeight: 1,
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+            zIndex: 2,
+          }}
+        >
+          ✕
+        </button>
       )}
       {showTyping ? (
         <TypingDots />
@@ -624,14 +692,20 @@ const inlineCodeStyle: React.CSSProperties = {
   fontSize: 12.5,
 };
 
-function AttachmentGrid({ attachments }: { attachments: AttachmentSummary[] }) {
+function AttachmentGrid({
+  attachments,
+  compact = false,
+}: {
+  attachments: AttachmentSummary[];
+  compact?: boolean;
+}) {
   return (
     <div
       style={{
         display: "flex",
         flexWrap: "wrap",
         gap: 6,
-        marginBottom: 6,
+        marginBottom: compact ? 0 : 6,
       }}
     >
       {attachments.map((a) =>
@@ -640,12 +714,14 @@ function AttachmentGrid({ attachments }: { attachments: AttachmentSummary[] }) {
             key={a.id}
             src={api.attachmentUrl(a.id)}
             alt={a.original_name}
+            onClick={() => window.open(api.attachmentUrl(a.id), "_blank")}
             style={{
-              maxWidth: 220,
-              maxHeight: 220,
-              borderRadius: 8,
-              border: "1px solid var(--border)",
+              maxWidth: compact ? 360 : 220,
+              maxHeight: compact ? 360 : 220,
+              borderRadius: compact ? 12 : 8,
+              border: compact ? "none" : "1px solid var(--border)",
               display: "block",
+              cursor: "zoom-in",
             }}
           />
         ) : (

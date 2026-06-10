@@ -97,6 +97,8 @@ export function GroupChat() {
           });
         }, 4000);
       }
+    } else if (ev.type === "message_deleted") {
+      setMessages((prev) => prev.filter((m) => m.id !== ev.id));
     } else if (ev.type === "error") {
       setError(ev.error);
     }
@@ -188,6 +190,19 @@ export function GroupChat() {
   const removeStaged = useCallback((id: string) => {
     setStaged((prev) => prev.filter((a) => a.id !== id));
   }, []);
+
+  const deleteMessage = useCallback(async (id: string) => {
+    if (!window.confirm("Delete this message?")) return;
+    // Optimistic remove — WS broadcast also fires.
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    try {
+      await api.deleteGroupMessage(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "delete_failed");
+      // Refetch history if delete failed so the deleted-from-UI msg comes back.
+      void loadHistory();
+    }
+  }, [loadHistory]);
 
   // ---- send ----------------------------------------------------------
   const send = useCallback(async () => {
@@ -317,6 +332,11 @@ export function GroupChat() {
                       msg={m}
                       isMe={m.user_id === meId}
                       prev={group.messages[i - 1]}
+                      onDelete={
+                        m.user_id === meId
+                          ? () => void deleteMessage(m.id)
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -433,16 +453,24 @@ function Bubble({
   msg,
   isMe,
   prev,
+  onDelete,
 }: {
   msg: GroupMessage;
   isMe: boolean;
   prev?: GroupMessage;
+  onDelete?: () => void;
 }) {
+  const [hover, setHover] = useState(false);
   // Stack messages from the same sender within 2 min — hide the name on follow-ups.
   const stack =
     !!prev &&
     prev.user_id === msg.user_id &&
     msg.created_at - prev.created_at < 2 * 60 * 1000;
+
+  const hasText = msg.body.trim().length > 0;
+  const hasAtt = !!msg.attachments && msg.attachments.length > 0;
+  const imageOnly = !hasText && hasAtt &&
+    msg.attachments!.every((a) => a.kind === "image");
 
   return (
     <motion.div
@@ -450,6 +478,8 @@ function Bubble({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         display: "flex",
         flexDirection: isMe ? "row-reverse" : "row",
@@ -471,6 +501,7 @@ function Bubble({
           display: "flex",
           flexDirection: "column",
           alignItems: isMe ? "flex-end" : "flex-start",
+          position: "relative",
         }}
       >
         {!stack && !isMe && (
@@ -487,25 +518,58 @@ function Bubble({
         )}
         <div
           style={{
-            padding: "0.55rem 0.85rem",
+            padding: imageOnly ? 0 : "0.55rem 0.85rem",
             borderRadius: "var(--radius-lg)",
-            background: isMe
-              ? "linear-gradient(135deg, rgba(122,167,255,0.30), rgba(164,139,255,0.22))"
-              : "var(--bg-2)",
-            border: "1px solid var(--border)",
+            background: imageOnly
+              ? "transparent"
+              : isMe
+                ? "linear-gradient(135deg, rgba(122,167,255,0.30), rgba(164,139,255,0.22))"
+                : "var(--bg-2)",
+            border: imageOnly ? "none" : "1px solid var(--border)",
             color: "var(--text)",
             fontSize: 14,
             lineHeight: 1.5,
             whiteSpace: "pre-wrap",
             wordWrap: "break-word",
+            overflow: "hidden",
           }}
           title={new Date(msg.created_at).toLocaleString()}
         >
-          {msg.attachments && msg.attachments.length > 0 && (
-            <GroupAttachmentGrid attachments={msg.attachments} />
+          {hasAtt && (
+            <GroupAttachmentGrid
+              attachments={msg.attachments!}
+              compact={imageOnly}
+            />
           )}
-          {msg.body}
+          {hasText && (
+            <div style={{ marginTop: hasAtt ? 6 : 0 }}>{msg.body}</div>
+          )}
         </div>
+        {hover && onDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete message"
+            style={{
+              position: "absolute",
+              top: -10,
+              [isMe ? "left" : "right"]: -8,
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              background: "var(--bg-2)",
+              border: "1px solid var(--border)",
+              color: "var(--text-dim)",
+              fontSize: 11,
+              lineHeight: 1,
+              cursor: "pointer",
+              display: "grid",
+              placeItems: "center",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+            }}
+          >
+            ✕
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -729,21 +793,39 @@ function Composer({
   );
 }
 
-function GroupAttachmentGrid({ attachments }: { attachments: AttachmentSummary[] }) {
+function GroupAttachmentGrid({
+  attachments,
+  compact = false,
+}: {
+  attachments: AttachmentSummary[];
+  compact?: boolean;
+}) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        marginBottom: compact ? 0 : 6,
+      }}
+    >
       {attachments.map((a) =>
         a.kind === "image" ? (
           <img
             key={a.id}
             src={api.groupAttachmentUrl(a.id)}
             alt={a.original_name}
+            onClick={() => {
+              // Open in default browser at full size.
+              window.open(api.groupAttachmentUrl(a.id), "_blank");
+            }}
             style={{
-              maxWidth: 220,
-              maxHeight: 220,
-              borderRadius: 8,
-              border: "1px solid var(--border)",
+              maxWidth: compact ? 360 : 220,
+              maxHeight: compact ? 360 : 220,
+              borderRadius: compact ? 12 : 8,
+              border: compact ? "none" : "1px solid var(--border)",
               display: "block",
+              cursor: "zoom-in",
             }}
           />
         ) : (

@@ -54,6 +54,12 @@ const stmts = {
       SET last_read_msg_id = excluded.last_read_msg_id,
           last_read_at = excluded.last_read_at
   `),
+  getMessage: db.prepare(`
+    SELECT id, user_id, body, created_at FROM group_messages WHERE id = ?
+  `),
+  deleteMessage: db.prepare(`
+    DELETE FROM group_messages WHERE id = ? AND user_id = ?
+  `),
 };
 
 /**
@@ -108,6 +114,45 @@ export function recentMessages(opts: {
 /** Mark which message a user has read up to. Used for unread badges later. */
 export function markRead(userId: string, msgId: string | null): void {
   stmts.setLastRead.run(userId, msgId, Date.now());
+}
+
+export interface GroupMessageStub {
+  id: string;
+  user_id: string;
+  body: string;
+  created_at: number;
+}
+
+export function getGroupMessage(id: string): GroupMessageStub | null {
+  return (
+    (stmts.getMessage.get(id) as GroupMessageStub | undefined) ?? null
+  );
+}
+
+/**
+ * Delete a message. Only the owner can delete their own message; admins
+ * can delete anything. Returns true on success.
+ *
+ * Broadcasts a `message_deleted` event on the hub so live clients can drop
+ * the row from their view without refetching history.
+ */
+export function deleteGroupMessage(opts: {
+  messageId: string;
+  ownerOnly: boolean;
+  userId: string;
+}): boolean {
+  const row = getGroupMessage(opts.messageId);
+  if (!row) return false;
+  if (opts.ownerOnly && row.user_id !== opts.userId) return false;
+  // Use ownerOnly=false (admin path) with explicit user check.
+  const r = opts.ownerOnly
+    ? stmts.deleteMessage.run(opts.messageId, opts.userId)
+    : db
+        .prepare("DELETE FROM group_messages WHERE id = ?")
+        .run(opts.messageId);
+  if (r.changes !== 1) return false;
+  groupHub.emit("message_deleted", { id: opts.messageId });
+  return true;
 }
 
 /** Broadcast a "X is typing" event to other connected sockets. Ephemeral. */

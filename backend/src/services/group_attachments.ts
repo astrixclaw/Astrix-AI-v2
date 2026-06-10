@@ -219,6 +219,11 @@ export function deleteGroupAttachment(row: GroupAttachmentRow): void {
   stmts.deleteOne.run(row.id);
 }
 
+/** Drop just the DB row for an attachment id (file caller's responsibility). */
+export function deleteGroupAttachmentRow(id: string): void {
+  stmts.deleteOne.run(id);
+}
+
 /** Drop staged group uploads older than 1 hour. */
 export function purgeGroupOrphanAttachments(): void {
   const cutoff = Date.now() - 60 * 60 * 1000;

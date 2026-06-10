@@ -19,6 +19,8 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   appendMessage,
   deleteConversation,
+  deleteMessage,
+  getMessage,
   listConversations,
   loadConversation,
   newConversationId,
@@ -32,6 +34,7 @@ import {
 import { FEATURES, hasPermission } from "../services/permissions.js";
 import {
   attachmentToDataUrl,
+  deleteAttachment,
   getAttachment,
   kindFor,
   linkAttachmentsToMessage,
@@ -100,6 +103,27 @@ export async function chatRoutes(app: FastifyInstance) {
       if (denyIfNoChat(reply, req.user!.id)) return;
       await purgeConversationAttachments(req.user!.id, req.params.id);
       deleteConversation(req.user!.id, req.params.id);
+      return { ok: true };
+    },
+  );
+
+  // Delete a single message in your own conversation.
+  app.delete<{ Params: { convId: string; msgId: string } }>(
+    "/api/conversations/:convId/messages/:msgId",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      if (denyIfNoChat(reply, req.user!.id)) return;
+      const m = getMessage(req.params.msgId);
+      if (!m) return reply.code(404).send({ error: "not_found" });
+      if (m.user_id !== req.user!.id || m.conv_id !== req.params.convId) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      // Clean any attachments belonging to this message.
+      for (const a of listAttachmentsForMessage(req.params.msgId)) {
+        deleteAttachment(a);
+      }
+      const ok = deleteMessage(req.user!.id, req.params.convId, req.params.msgId);
+      if (!ok) return reply.code(404).send({ error: "not_found" });
       return { ok: true };
     },
   );

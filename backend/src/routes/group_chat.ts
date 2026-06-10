@@ -17,14 +17,16 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
-import { createReadStream } from "node:fs";
+import { createReadStream, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { requireAuth } from "../middleware/auth.js";
 import { resolveSession } from "../services/auth.js";
 import {
+  deleteGroupMessage,
   emitTyping,
+  getGroupMessage,
   groupHub,
   markRead,
   postMessage,
@@ -36,6 +38,7 @@ import {
 import {
   GROUP_MAX_FILE_BYTES,
   GROUP_MAX_FILES_PER_MESSAGE,
+  deleteGroupAttachmentRow,
   getGroupAttachment,
   groupKindFor,
   linkGroupAttachmentsToMessage,
@@ -81,11 +84,13 @@ function attachPath(row: GroupAttachmentRow): string {
 }
 
 interface OutgoingEvent {
-  type: "message" | "typing" | "hello" | "error";
+  type: "message" | "typing" | "hello" | "error" | "message_deleted";
   message?: GroupMessage;
   typing?: TypingEvent;
   user_id?: string;
   error?: string;
+  /** message id, only present on message_deleted */
+  id?: string;
 }
 
 interface IncomingEvent {
@@ -296,8 +301,11 @@ export async function groupChatRoutes(app: FastifyInstance) {
         if (t.user_id === user.id) return;
         send(ws, { type: "typing", typing: t });
       };
+      const onDeleted = (ev: { id: string }) =>
+        send(ws, { type: "message_deleted", id: ev.id });
       groupHub.on("message", onMessage);
       groupHub.on("typing", onTyping);
+      groupHub.on("message_deleted", onDeleted);
 
       // Tell the client who we authed as. Renderer uses this for cosmetics
       // (avatar, "you" badge, last-read pointer).
@@ -325,11 +333,42 @@ export async function groupChatRoutes(app: FastifyInstance) {
       ws.on("close", () => {
         groupHub.off("message", onMessage);
         groupHub.off("typing", onTyping);
+        groupHub.off("message_deleted", onDeleted);
       });
       ws.on("error", () => {
         // Swallow socket errors so they can't bubble to uncaughtException.
         // The close handler above will run too.
       });
+    },
+  );
+
+  // ---- Delete a message (owner-only — admins may delete anyone's) -----
+  app.delete<{ Params: { id: string } }>(
+    "/api/group/messages/:id",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      if (!hasPermission(req.user!.id, FEATURES.GROUP_CHAT)) {
+        return reply.code(403).send({ error: "no_permission_group_chat" });
+      }
+      const m = getGroupMessage(req.params.id);
+      if (!m) return reply.code(404).send({ error: "not_found" });
+      const isOwner = m.user_id === req.user!.id;
+      const isAdmin = !!req.user!.is_admin;
+      if (!isOwner && !isAdmin) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      // Wipe any attachment files + rows this message had.
+      for (const a of listGroupAttachmentsForMessage(req.params.id)) {
+        try { unlinkSync(attachPath(a)); } catch { /* ignore */ }
+        deleteGroupAttachmentRow(a.id);
+      }
+      const ok = deleteGroupMessage({
+        messageId: req.params.id,
+        ownerOnly: !isAdmin,
+        userId: req.user!.id,
+      });
+      if (!ok) return reply.code(404).send({ error: "not_found" });
+      return { ok: true };
     },
   );
 }

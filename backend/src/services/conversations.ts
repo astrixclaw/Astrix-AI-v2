@@ -58,6 +58,14 @@ const stmts = {
   deleteConv: db.prepare(`
     DELETE FROM personal_messages WHERE user_id = ? AND conv_id = ?
   `),
+  getMessage: db.prepare(`
+    SELECT id, user_id, conv_id, role, body, created_at
+    FROM personal_messages WHERE id = ?
+  `),
+  deleteMessage: db.prepare(`
+    DELETE FROM personal_messages
+    WHERE id = ? AND user_id = ? AND conv_id = ?
+  `),
 };
 
 function titleFor(firstUserBody: string | null): string {
@@ -104,4 +112,17 @@ export function loadConversation(userId: string, convId: string): MessageRow[] {
 
 export function deleteConversation(userId: string, convId: string): void {
   stmts.deleteConv.run(userId, convId);
+}
+
+export function getMessage(messageId: string): MessageRow | null {
+  return (stmts.getMessage.get(messageId) as MessageRow | undefined) ?? null;
+}
+
+export function deleteMessage(
+  userId: string,
+  convId: string,
+  messageId: string,
+): boolean {
+  const r = stmts.deleteMessage.run(messageId, userId, convId);
+  return r.changes === 1;
 }

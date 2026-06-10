@@ -117,6 +117,7 @@ export type GroupSocketEvent =
   | { type: "hello"; user_id: string }
   | { type: "message"; message: GroupMessage }
   | { type: "typing"; typing: GroupTyping }
+  | { type: "message_deleted"; id: string }
   | { type: "error"; error: string };
 
 // ---- Admin: users + permissions ----------------------------------------

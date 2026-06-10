@@ -144,6 +144,10 @@ export const api = {
     request<{ messages: ChatMessage[] }>(`/api/conversations/${id}`),
   deleteConversation: (id: string) =>
     request<{ ok: true }>(`/api/conversations/${id}`, { method: "DELETE" }),
+  deleteChatMessage: (convId: string, msgId: string) =>
+    request<{ ok: true }>(`/api/conversations/${convId}/messages/${msgId}`, {
+      method: "DELETE",
+    }),
 
   // ---- admin ----
   getGatewayConfig: () =>
@@ -247,6 +251,8 @@ export const api = {
     if (before) q.set("before", String(before));
     return request<{ messages: GroupMessage[] }>(`/api/group/messages?${q.toString()}`);
   },
+  deleteGroupMessage: (id: string) =>
+    request<{ ok: true }>(`/api/group/messages/${id}`, { method: "DELETE" }),
   postGroupMessage: (body: string, attachment_ids: string[] = []) =>
     request<{ message: GroupMessage }>("/api/group/messages", {
       method: "POST",
