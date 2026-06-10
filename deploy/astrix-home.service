@@ -1,0 +1,42 @@
+[Unit]
+Description=Astrix Home backend (auth, chat, Hue, group chat)
+Documentation=https://github.com/astrixclaw (Astrix Home internal project)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=astrix
+Group=astrix
+WorkingDirectory=/home/astrix/.openclaw/workspace/Astrix-Home/backend
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+# Cap how many times we'll respawn in a burst to avoid pegging the box if
+# something's badly wrong; the unit can still be started manually.
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+# Resource sanity caps. The backend is tiny in steady state; if it suddenly
+# starts gobbling memory, we want systemd to KILL it rather than swap the box.
+MemoryMax=512M
+TasksMax=128
+
+# Standard streams go to the journal; we also tee to a file for tailing.
+StandardOutput=append:/var/log/astrix-home/backend.log
+StandardError=append:/var/log/astrix-home/backend.log
+
+# Light hardening (won't break anything we do, just narrows the blast radius).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/astrix/.openclaw/workspace/Astrix-Home/backend /var/log/astrix-home
+
+# Run as production
+Environment=NODE_ENV=production
+Environment=PORT=18800
+Environment=HOST=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target

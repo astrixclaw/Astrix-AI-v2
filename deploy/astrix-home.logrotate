@@ -1,0 +1,14 @@
+# /etc/logrotate.d/astrix-home
+# Daily rotation, keep two weeks of history, compress everything older than
+# the current day. The backend writes via append, so a copytruncate is the
+# right move (no signal handling needed).
+/var/log/astrix-home/backend.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su astrix astrix
+}
