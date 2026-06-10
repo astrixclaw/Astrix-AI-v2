@@ -169,6 +169,12 @@ textarea::placeholder {
   background: var(--bg-1);
 }
 
+/* Blinking caret used by the streaming assistant bubble */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+
 /* Utility: visually hidden but still accessible to screen readers */
 .sr-only {
   position: absolute;

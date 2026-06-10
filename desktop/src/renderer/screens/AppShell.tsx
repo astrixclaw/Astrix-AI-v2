@@ -1,19 +1,27 @@
 /**
- * App shell: the main UI users see once signed in.
+ * App shell.
  *
- * This is a Phase 3 placeholder. Subsequent phases fill in the sidebar, the
- * chat area, the Hue controls, the group chat panel, and the admin pane.
- *
- * We deliberately keep the layout primitives here (sidebar + main pane) so
- * future screens slot in without rewiring the shell.
+ * Owns the persistent sidebar (nav + user chip) and renders the active view
+ * in the main pane. Adds/removes tabs based on the signed-in user's
+ * permissions so members never see entries they can't open.
  */
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sigil } from "../components/Sigil";
 import { Button } from "../components/Button";
 import { useAuth } from "../lib/auth";
+import { hasPermission } from "../lib/perms";
+import { useView, type ViewName } from "../lib/view";
+import { Chat } from "./Chat";
+import { Placeholder } from "./Placeholder";
 
 export function AppShell() {
-  const { user, signOut } = useAuth();
+  const { user, permissions, signOut } = useAuth();
+  const { view, setView } = useView();
+
+  const showChat = hasPermission(user, permissions, "chat");
+  const showLighting = hasPermission(user, permissions, "lighting");
+  const showGroup = hasPermission(user, permissions, "group_chat");
+  const showAdmin = !!user?.is_admin;
 
   return (
     <motion.div
@@ -22,41 +30,68 @@ export function AppShell() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.35 }}
     >
-      {/* Sidebar */}
       <aside
         style={{
-          width: 240,
+          width: 220,
           borderRight: "1px solid var(--border)",
-          background: "var(--bg-2)",
+          background: "var(--bg-1)",
           display: "flex",
           flexDirection: "column",
-          padding: "1rem",
+          padding: "0.85rem 0.75rem",
         }}
       >
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.7rem",
-            padding: "0.4rem 0.2rem 1rem",
+            gap: "0.6rem",
+            padding: "0.4rem 0.3rem 1rem",
             borderBottom: "1px solid var(--border)",
-            marginBottom: "1rem",
+            marginBottom: "0.85rem",
           }}
         >
-          <Sigil size={28} />
+          <Sigil size={26} />
           <span
             className="gradient-text"
-            style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.01em" }}
+            style={{ fontWeight: 700, fontSize: 15, letterSpacing: "-0.01em" }}
           >
             Astrix Home
           </span>
         </div>
 
-        <NavItem label="Chat with Astrix" />
-        <NavItem label="Group Chat" />
-        <NavItem label="Lighting" />
-        {user?.is_admin ? <NavItem label="Admin" /> : null}
-        <NavItem label="Settings" />
+        {showChat && (
+          <NavItem
+            label="Chat with Astrix"
+            active={view === "chat"}
+            onClick={() => setView("chat")}
+          />
+        )}
+        {showGroup && (
+          <NavItem
+            label="Group Chat"
+            active={view === "group"}
+            onClick={() => setView("group")}
+          />
+        )}
+        {showLighting && (
+          <NavItem
+            label="Lighting"
+            active={view === "lighting"}
+            onClick={() => setView("lighting")}
+          />
+        )}
+        {showAdmin && (
+          <NavItem
+            label="Admin"
+            active={view === "admin"}
+            onClick={() => setView("admin")}
+          />
+        )}
+        <NavItem
+          label="Settings"
+          active={view === "settings"}
+          onClick={() => setView("settings")}
+        />
 
         <div style={{ flex: 1 }} />
 
@@ -107,67 +142,82 @@ export function AppShell() {
         <Button
           variant="ghost"
           onClick={() => void signOut()}
-          style={{ marginTop: "0.6rem", width: "100%" }}
+          style={{ marginTop: "0.5rem", width: "100%", padding: "0.45rem" }}
         >
           Sign out
         </Button>
       </aside>
 
-      {/* Main pane */}
+      {/* main pane */}
       <main
         style={{
           flex: 1,
-          display: "grid",
-          placeItems: "center",
-          padding: "2rem",
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--bg-1)",
+          minWidth: 0,
         }}
       >
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          style={{
-            textAlign: "center",
-            maxWidth: 480,
-          }}
-        >
-          <Sigil size={80} />
-          <h1
-            className="gradient-text"
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.18 }}
             style={{
-              fontSize: 32,
-              fontWeight: 700,
-              margin: "1rem 0 0.5rem",
-              letterSpacing: "-0.02em",
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
             }}
           >
-            Hi {user?.username} ✨
-          </h1>
-          <p style={{ color: "var(--text-dim)", fontSize: 14, lineHeight: 1.55 }}>
-            The chat, lighting, and group chat panels will land in the next
-            phases. For now, sign-in and the design language are wired up.
-          </p>
-        </motion.div>
+            <Pane view={view} />
+          </motion.div>
+        </AnimatePresence>
       </main>
     </motion.div>
   );
 }
 
-function NavItem({ label }: { label: string }) {
+function Pane({ view }: { view: ViewName }) {
+  switch (view) {
+    case "chat":
+      return <Chat />;
+    case "lighting":
+      return <Placeholder title="Lighting" message="Hue controls land in Phase 5." />;
+    case "group":
+      return <Placeholder title="Group Chat" message="Household chat lands in Phase 6." />;
+    case "admin":
+      return <Placeholder title="Admin" message="User & permission management lands in Phase 7." />;
+    case "settings":
+      return <Placeholder title="Settings" message="App + gateway settings UI coming soon." />;
+  }
+}
+
+function NavItem({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <motion.button
       whileHover={{ x: 2 }}
+      onClick={onClick}
       style={{
         textAlign: "left",
         padding: "0.55rem 0.75rem",
         borderRadius: "var(--radius-md)",
-        color: "var(--text-dim)",
+        color: active ? "var(--text)" : "var(--text-dim)",
+        background: active ? "var(--bg-3)" : "transparent",
         marginBottom: "0.15rem",
         fontSize: 13,
-        fontWeight: 500,
-      }}
-      onClick={() => {
-        /* Phase 4+ routes go here */
+        fontWeight: active ? 600 : 500,
+        transition: "background 140ms var(--ease-out)",
       }}
     >
       {label}

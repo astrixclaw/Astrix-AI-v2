@@ -7,6 +7,7 @@
  */
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { ViewProvider } from "./lib/view";
 import { Splash } from "./components/Splash";
 import { Login } from "./screens/Login";
 import { Setup } from "./screens/Setup";
@@ -16,7 +17,9 @@ import { AppShell } from "./screens/AppShell";
 export function App() {
   return (
     <AuthProvider>
-      <Router />
+      <ViewProvider>
+        <Router />
+      </ViewProvider>
     </AuthProvider>
   );
 }

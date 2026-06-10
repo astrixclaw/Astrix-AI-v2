@@ -37,6 +37,38 @@ export interface AppConfig {
   backendUrl: string;
 }
 
+// ---- Chat ---------------------------------------------------------------
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  updated_at: number;
+  message_count: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  conv_id: string;
+  role: "user" | "assistant";
+  body: string;
+  created_at: number;
+}
+
+/** SSE event payloads from POST /api/conversations/:id/messages. */
+export type ChatStreamEvent =
+  | { type: "user_saved"; message: ChatMessage }
+  | { type: "delta"; text: string }
+  | { type: "done"; message: ChatMessage }
+  | { type: "error"; error: string };
+
+// ---- Admin gateway config ----------------------------------------------
+
+export interface GatewayConfig {
+  url: string;
+  token: string;
+  agent: string;
+}
+
 // ---- IPC: what the preload exposes on window.api ------------------------
 
 export interface ApiBridge {

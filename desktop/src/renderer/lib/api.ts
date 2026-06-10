@@ -6,7 +6,15 @@
  * AppConfig; the token comes from the in-memory session (set by the auth
  * context). Errors are normalised into ApiError so the UI can branch cleanly.
  */
-import type { Permission, SessionInfo, User } from "@shared/types";
+import type {
+  ChatMessage,
+  ChatStreamEvent,
+  ConversationSummary,
+  GatewayConfig,
+  Permission,
+  SessionInfo,
+  User,
+} from "@shared/types";
 
 export class ApiError extends Error {
   constructor(
@@ -120,4 +128,89 @@ export const api = {
 
   setOwnPin: (pin: string) =>
     request<{ ok: true }>("/api/me/pin", { method: "POST", body: { pin } }),
+
+  // ---- conversations ----
+  listConversations: () =>
+    request<{ conversations: ConversationSummary[] }>("/api/conversations"),
+  newConversation: () =>
+    request<{ id: string }>("/api/conversations", { method: "POST" }),
+  loadConversation: (id: string) =>
+    request<{ messages: ChatMessage[] }>(`/api/conversations/${id}`),
+  deleteConversation: (id: string) =>
+    request<{ ok: true }>(`/api/conversations/${id}`, { method: "DELETE" }),
+
+  // ---- admin ----
+  getGatewayConfig: () =>
+    request<GatewayConfig>("/api/admin/gateway"),
+  setGatewayConfig: (patch: Partial<GatewayConfig>) =>
+    request<GatewayConfig>("/api/admin/gateway", { method: "PATCH", body: patch }),
 };
+
+/**
+ * Stream a chat turn from the backend. Returns an async iterable of
+ * ChatStreamEvent. Caller decides when to break the loop (e.g. on "done" or
+ * "error"). Closing the iterator aborts the request.
+ */
+export async function* streamChatMessage(
+  convId: string,
+  text: string,
+  signal?: AbortSignal,
+): AsyncGenerator<ChatStreamEvent, void, void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
+  if (_token) headers.Authorization = `Bearer ${_token}`;
+
+  const res = await fetch(
+    `${_baseUrl}/api/conversations/${convId}/messages`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ text }),
+      signal,
+    },
+  );
+
+  if (!res.ok || !res.body) {
+    let code = `http_${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j?.error) code = j.error;
+    } catch {
+      /* ignore */
+    }
+    yield { type: "error", error: code };
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) >= 0) {
+        const event = buffer.slice(0, sep).trim();
+        buffer = buffer.slice(sep + 2);
+        if (!event.startsWith("data:")) continue;
+        const payload = event.slice(5).trim();
+        if (!payload) continue;
+        try {
+          yield JSON.parse(payload) as ChatStreamEvent;
+        } catch {
+          /* tolerate malformed events */
+        }
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* ignore */
+    }
+  }
+}

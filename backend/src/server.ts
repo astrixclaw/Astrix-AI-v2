@@ -7,7 +7,9 @@
  */
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
+import { chatRoutes } from "./routes/chat.js";
 import { purgeExpiredSessions } from "./services/auth.js";
 
 const PORT = Number(process.env.PORT ?? 18800);
@@ -19,12 +21,30 @@ const app = Fastify({
   },
 });
 
+// Fastify rejects empty JSON bodies by default. Some of our routes legitimately
+// take no body (logout, new-conversation). Treat empty as `{}`.
+app.addContentTypeParser(
+  "application/json",
+  { parseAs: "string" },
+  (_req, raw, done) => {
+    const body = (raw as string | Buffer).toString().trim();
+    if (!body) return done(null, {});
+    try {
+      done(null, JSON.parse(body));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  },
+);
+
 // Permissive CORS: the desktop app sits on file:// in production and
 // http://localhost:5173 in dev. There are no browser users of this API, so
 // allowing all origins is fine — auth comes from the bearer token.
 await app.register(cors, { origin: true, credentials: false });
 
 await app.register(authRoutes);
+await app.register(chatRoutes);
+await app.register(adminRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
 
