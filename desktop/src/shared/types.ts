@@ -80,6 +80,29 @@ export interface HueRoom {
   anyReachable: boolean;
 }
 
+// ---- Group chat ---------------------------------------------------------
+
+export interface GroupMessage {
+  id: string;
+  user_id: string;
+  username: string;
+  avatar: string | null;
+  body: string;
+  created_at: number;
+}
+
+export interface GroupTyping {
+  user_id: string;
+  username: string;
+  typing: boolean;
+}
+
+export type GroupSocketEvent =
+  | { type: "hello"; user_id: string }
+  | { type: "message"; message: GroupMessage }
+  | { type: "typing"; typing: GroupTyping }
+  | { type: "error"; error: string };
+
 // ---- Admin: users + permissions ----------------------------------------
 
 export type Feature = "chat" | "lighting" | "group_chat";

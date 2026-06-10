@@ -14,6 +14,7 @@ import type {
   CreateUserBody,
   Feature,
   GatewayConfig,
+  GroupMessage,
   HueRoom,
   Permission,
   SessionInfo,
@@ -189,7 +190,28 @@ export const api = {
     ),
   deleteAdminUser: (id: string) =>
     request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
+
+  // ---- group chat ----
+  listGroupMessages: (limit = 50, before?: number) => {
+    const q = new URLSearchParams({ limit: String(limit) });
+    if (before) q.set("before", String(before));
+    return request<{ messages: GroupMessage[] }>(`/api/group/messages?${q.toString()}`);
+  },
+  postGroupMessage: (body: string) =>
+    request<{ message: GroupMessage }>("/api/group/messages", {
+      method: "POST",
+      body: { body },
+    }),
 };
+
+/** Open a WebSocket to the group room. Returns the raw WS so callers control reconnect. */
+export function openGroupSocket(): WebSocket {
+  const url = new URL(getBaseUrl());
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.pathname = "/api/group/ws";
+  if (_token) url.searchParams.set("token", _token);
+  return new WebSocket(url.toString());
+}
 
 /**
  * Stream a chat turn from the backend. Returns an async iterable of

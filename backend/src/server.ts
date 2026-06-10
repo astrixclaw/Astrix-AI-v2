@@ -6,10 +6,12 @@
  * 0.0.0.0 so LAN clients can reach the service.
  */
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
+import { groupChatRoutes } from "./routes/group_chat.js";
 import { lightingRoutes } from "./routes/lighting.js";
 import { purgeExpiredSessions } from "./services/auth.js";
 
@@ -43,9 +45,11 @@ app.addContentTypeParser(
 // allowing all origins is fine — auth comes from the bearer token.
 await app.register(cors, { origin: true, credentials: false });
 
+await app.register(websocket);
 await app.register(authRoutes);
 await app.register(chatRoutes);
 await app.register(lightingRoutes);
+await app.register(groupChatRoutes);
 await app.register(adminRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));

@@ -13,6 +13,7 @@ import { hasPermission } from "../lib/perms";
 import { useView, type ViewName } from "../lib/view";
 import { Admin } from "./Admin";
 import { Chat } from "./Chat";
+import { GroupChat } from "./GroupChat";
 import { Lighting } from "./Lighting";
 import { Placeholder } from "./Placeholder";
 import { Settings } from "./Settings";
@@ -190,7 +191,7 @@ function Pane({ view }: { view: ViewName }) {
     case "lighting":
       return <Lighting />;
     case "group":
-      return <Placeholder title="Group Chat" message="Household chat lands in Phase 6." />;
+      return <GroupChat />;
     case "admin":
       return <Admin />;
     case "settings":
