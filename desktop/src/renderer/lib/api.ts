@@ -229,7 +229,10 @@ export const api = {
     }
     return (await res.json()) as AttachmentSummary;
   },
-  attachmentUrl: (id: string): string => `${_baseUrl}/api/attachments/${id}`,
+  attachmentUrl: (id: string): string => {
+    const url = `${_baseUrl}/api/attachments/${id}`;
+    return _token ? `${url}?token=${encodeURIComponent(_token)}` : url;
+  },
   getAttachmentAuthorized: async (id: string): Promise<Blob> => {
     const headers: Record<string, string> = {};
     if (_token) headers.Authorization = `Bearer ${_token}`;
@@ -244,11 +247,35 @@ export const api = {
     if (before) q.set("before", String(before));
     return request<{ messages: GroupMessage[] }>(`/api/group/messages?${q.toString()}`);
   },
-  postGroupMessage: (body: string) =>
+  postGroupMessage: (body: string, attachment_ids: string[] = []) =>
     request<{ message: GroupMessage }>("/api/group/messages", {
       method: "POST",
-      body: { body },
+      body: { body, attachment_ids },
     }),
+  uploadGroupAttachment: async (file: File): Promise<AttachmentSummary> => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const headers: Record<string, string> = {};
+    if (_token) headers.Authorization = `Bearer ${_token}`;
+    const res = await fetch(`${_baseUrl}/api/group/attachments`, {
+      method: "POST",
+      headers,
+      body: fd,
+    });
+    if (!res.ok) {
+      let code = `http_${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: string };
+        if (j?.error) code = j.error;
+      } catch { /* ignore */ }
+      throw new ApiError(code, res.status);
+    }
+    return (await res.json()) as AttachmentSummary;
+  },
+  groupAttachmentUrl: (id: string): string => {
+    const url = `${_baseUrl}/api/group/attachments/${id}`;
+    return _token ? `${url}?token=${encodeURIComponent(_token)}` : url;
+  },
 };
 
 /** Open a WebSocket to the group room. Returns the raw WS so callers control reconnect. */

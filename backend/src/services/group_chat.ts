@@ -16,6 +16,14 @@ import { EventEmitter } from "node:events";
 import { db } from "../db/index.js";
 import { newId } from "./auth.js";
 
+export interface GroupAttachmentSummary {
+  id: string;
+  mime: string;
+  size: number;
+  original_name: string;
+  kind: "image" | "text";
+}
+
 export interface GroupMessage {
   id: string;
   user_id: string;
@@ -23,6 +31,7 @@ export interface GroupMessage {
   avatar: string | null;
   body: string;
   created_at: number;
+  attachments?: GroupAttachmentSummary[];
 }
 
 const stmts = {
@@ -66,6 +75,7 @@ export const groupHub = new GroupHub();
 export function postMessage(
   user: { id: string; username: string; avatar: string | null },
   body: string,
+  attachments?: GroupAttachmentSummary[],
 ): GroupMessage {
   const id = newId();
   const now = Date.now();
@@ -77,6 +87,7 @@ export function postMessage(
     avatar: user.avatar,
     body,
     created_at: now,
+    attachments: attachments && attachments.length > 0 ? attachments : undefined,
   };
   groupHub.emit("message", msg);
   return msg;

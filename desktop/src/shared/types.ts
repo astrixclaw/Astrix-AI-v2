@@ -104,6 +104,7 @@ export interface GroupMessage {
   avatar: string | null;
   body: string;
   created_at: number;
+  attachments?: AttachmentSummary[];
 }
 
 export interface GroupTyping {

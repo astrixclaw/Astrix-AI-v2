@@ -27,7 +27,16 @@ import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
 import { api, openGroupSocket } from "../lib/api";
 import { hasPermission } from "../lib/perms";
-import type { GroupMessage, GroupSocketEvent, GroupTyping } from "@shared/types";
+import type {
+  AttachmentSummary,
+  GroupMessage,
+  GroupSocketEvent,
+  GroupTyping,
+} from "@shared/types";
+
+const GROUP_MAX_ATTACHMENTS = 4;
+const GROUP_MAX_FILE_BYTES = 8 * 1024 * 1024;
+const GROUP_ACCEPTED = "image/png,image/jpeg,image/webp,.txt,.md,.json,.log";
 
 // ---------------------------------------------------------------------------
 
@@ -38,6 +47,9 @@ export function GroupChat() {
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [staged, setStaged] = useState<AttachmentSummary[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({}); // userId -> username
@@ -138,15 +150,57 @@ export function GroupChat() {
     };
   }, [allowed, connect, loadHistory]);
 
+  // ---- file handling -------------------------------------------------
+  const handleFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+      if (staged.length + list.length > GROUP_MAX_ATTACHMENTS) {
+        setError(`Up to ${GROUP_MAX_ATTACHMENTS} files per message.`);
+        return;
+      }
+      const oversized = list.find((f) => f.size > GROUP_MAX_FILE_BYTES);
+      if (oversized) {
+        setError(`"${oversized.name}" is over the 8 MB limit.`);
+        return;
+      }
+      setError(null);
+      setUploading(true);
+      try {
+        for (const file of list) {
+          try {
+            const att = await api.uploadGroupAttachment(file);
+            setStaged((prev) => [...prev, att]);
+          } catch (e) {
+            setError(
+              e instanceof Error ? e.message.replace(/^api_/, "") : "upload_failed",
+            );
+            break;
+          }
+        }
+      } finally {
+        setUploading(false);
+      }
+    },
+    [staged],
+  );
+
+  const removeStaged = useCallback((id: string) => {
+    setStaged((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   // ---- send ----------------------------------------------------------
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && staged.length === 0) || sending) return;
     setSending(true);
     setError(null);
+    const attachmentsForTurn = staged;
     try {
-      const res = await api.postGroupMessage(text);
+      const ids = attachmentsForTurn.map((a) => a.id);
+      const res = await api.postGroupMessage(text, ids);
       setInput("");
+      setStaged([]);
       setMessages((prev) =>
         prev.some((m) => m.id === res.message.id) ? prev : [...prev, res.message],
       );
@@ -155,7 +209,7 @@ export function GroupChat() {
     } finally {
       setSending(false);
     }
-  }, [input, sending]);
+  }, [input, sending, staged]);
 
   // ---- typing emit (debounced) ---------------------------------------
   const typingTimer = useRef<number | null>(null);
@@ -198,8 +252,52 @@ export function GroupChat() {
   if (!allowed) return <NoAccess />;
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div
+      style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, position: "relative" }}
+      onDragEnter={(e) => {
+        if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
+          e.preventDefault();
+          setDragOver(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) e.preventDefault();
+      }}
+      onDragLeave={(e) => {
+        if (
+          e.currentTarget instanceof HTMLElement &&
+          !e.currentTarget.contains(e.relatedTarget as Node)
+        ) {
+          setDragOver(false);
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer?.files?.length) void handleFiles(e.dataTransfer.files);
+      }}
+    >
       <Header connected={connected} />
+      {dragOver && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            top: 56,
+            background: "rgba(122,167,255,0.10)",
+            border: "2px dashed rgba(122,167,255,0.5)",
+            borderRadius: 12,
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "none",
+            zIndex: 5,
+          }}
+        >
+          <div style={{ padding: "0.6rem 1rem", borderRadius: 8, background: "rgba(0,0,0,0.5)", fontSize: 13 }}>
+            Drop to attach (max 4, 8 MB each)
+          </div>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -250,6 +348,10 @@ export function GroupChat() {
         onSend={() => void send()}
         sending={sending}
         connected={connected}
+        staged={staged}
+        uploading={uploading}
+        onFiles={(fs) => void handleFiles(fs)}
+        onRemoveStaged={removeStaged}
       />
     </div>
   );
@@ -399,6 +501,9 @@ function Bubble({
           }}
           title={new Date(msg.created_at).toLocaleString()}
         >
+          {msg.attachments && msg.attachments.length > 0 && (
+            <GroupAttachmentGrid attachments={msg.attachments} />
+          )}
           {msg.body}
         </div>
       </div>
@@ -504,14 +609,23 @@ function Composer({
   onSend,
   sending,
   connected,
+  staged,
+  uploading,
+  onFiles,
+  onRemoveStaged,
 }: {
   value: string;
   onChange: (s: string) => void;
   onSend: () => void;
   sending: boolean;
   connected: boolean;
+  staged: AttachmentSummary[];
+  uploading: boolean;
+  onFiles: (files: FileList | File[]) => void;
+  onRemoveStaged: (id: string) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -519,41 +633,234 @@ function Composer({
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }, [value]);
 
+  const onPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files: File[] = [];
+      for (const item of Array.from(e.clipboardData.items)) {
+        if (item.kind === "file") {
+          const f = item.getAsFile();
+          if (f) files.push(f);
+        }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        onFiles(files);
+      }
+    },
+    [onFiles],
+  );
+
+  const canSend = (value.trim().length > 0 || staged.length > 0) && !uploading;
+  const stagedFull = staged.length >= GROUP_MAX_ATTACHMENTS;
+
   return (
     <div
       style={{
-        padding: "0.75rem 1rem",
+        padding: "0.6rem 1rem 0.75rem",
         borderTop: "1px solid var(--border)",
         background: "var(--bg-2)",
         display: "flex",
-        gap: "0.55rem",
-        alignItems: "flex-end",
+        flexDirection: "column",
+        gap: "0.5rem",
       }}
     >
-      <textarea
-        ref={ref}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={connected ? "Message the household…" : "Reconnecting — you can still type"}
-        rows={1}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        style={{ flex: 1, resize: "none", maxHeight: 160, lineHeight: 1.5 }}
-      />
-      <Button
-        variant="primary"
-        onClick={onSend}
-        loading={sending}
-        disabled={!value.trim()}
-      >
-        Send
-      </Button>
+      {staged.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {staged.map((a) => (
+            <GroupStagedTile key={a.id} att={a} onRemove={() => onRemoveStaged(a.id)} />
+          ))}
+          {uploading && (
+            <div style={{ fontSize: 12, color: "var(--text-faint)", alignSelf: "center" }}>
+              uploading…
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: "0.55rem", alignItems: "flex-end" }}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={GROUP_ACCEPTED}
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            if (e.target.files?.length) onFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={stagedFull || uploading}
+          title={stagedFull ? "Up to 4 files per message" : "Attach files"}
+          style={{
+            padding: "0.55rem 0.6rem",
+            borderRadius: 8,
+            background: "transparent",
+            border: "1px solid var(--border)",
+            color: stagedFull ? "var(--text-faint)" : "var(--text-dim)",
+            cursor: stagedFull || uploading ? "not-allowed" : "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+          }}
+        >
+          📎
+        </button>
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onPaste={onPaste}
+          placeholder={connected ? "Message the household…" : "Reconnecting — you can still type"}
+          rows={1}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (canSend) onSend();
+            }
+          }}
+          style={{ flex: 1, resize: "none", maxHeight: 160, lineHeight: 1.5 }}
+        />
+        <Button variant="primary" onClick={onSend} loading={sending} disabled={!canSend}>
+          Send
+        </Button>
+      </div>
     </div>
   );
+}
+
+function GroupAttachmentGrid({ attachments }: { attachments: AttachmentSummary[] }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+      {attachments.map((a) =>
+        a.kind === "image" ? (
+          <img
+            key={a.id}
+            src={api.groupAttachmentUrl(a.id)}
+            alt={a.original_name}
+            style={{
+              maxWidth: 220,
+              maxHeight: 220,
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              display: "block",
+            }}
+          />
+        ) : (
+          <a
+            key={a.id}
+            href={api.groupAttachmentUrl(a.id)}
+            target="_blank"
+            rel="noreferrer noopener"
+            style={{
+              padding: "0.4rem 0.6rem",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "rgba(0,0,0,0.25)",
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              maxWidth: 220,
+              color: "var(--text)",
+              textDecoration: "none",
+            }}
+            title={a.original_name}
+          >
+            <span aria-hidden>📄</span>
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {a.original_name}
+            </span>
+            <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+              {humanBytes(a.size)}
+            </span>
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
+function GroupStagedTile({
+  att,
+  onRemove,
+}: {
+  att: AttachmentSummary;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: att.kind === "image" ? 2 : "0.4rem 0.55rem",
+        borderRadius: 8,
+        border: "1px solid var(--border)",
+        background: "rgba(0,0,0,0.2)",
+        maxWidth: 200,
+      }}
+    >
+      {att.kind === "image" ? (
+        <img
+          src={api.groupAttachmentUrl(att.id)}
+          alt={att.original_name}
+          style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 6 }}
+        />
+      ) : (
+        <span aria-hidden>📄</span>
+      )}
+      <div style={{ fontSize: 12, color: "var(--text-dim)", overflow: "hidden" }}>
+        <div
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            maxWidth: 130,
+          }}
+          title={att.original_name}
+        >
+          {att.original_name}
+        </div>
+        <div style={{ color: "var(--text-faint)", fontSize: 10 }}>
+          {humanBytes(att.size)}
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        title="Remove"
+        style={{
+          position: "absolute",
+          top: -6,
+          right: -6,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          background: "var(--bg-2)",
+          border: "1px solid var(--border)",
+          color: "var(--text)",
+          fontSize: 10,
+          lineHeight: 1,
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+function humanBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 // ---- helpers ----------------------------------------------------------
@@ -602,6 +909,12 @@ function prettyError(code: string): string {
       return "Message can't be empty.";
     case "message_too_long":
       return "Message is too long.";
+    case "unsupported_type":
+      return "That file type isn't supported.";
+    case "file_too_large":
+      return "File is too big (8 MB max).";
+    case "bad_attachments":
+      return "Attachment is no longer valid — please re-upload.";
     default:
       return code.replace(/_/g, " ");
   }

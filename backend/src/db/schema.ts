@@ -68,6 +68,19 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS group_attachments (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id    TEXT,
+  mime          TEXT NOT NULL,
+  size          INTEGER NOT NULL,
+  original_name TEXT NOT NULL,
+  kind          TEXT NOT NULL,
+  created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_group_attachments_user ON group_attachments(user_id);
+CREATE INDEX IF NOT EXISTS idx_group_attachments_msg ON group_attachments(message_id);
+
 CREATE TABLE IF NOT EXISTS attachments (
   id            TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

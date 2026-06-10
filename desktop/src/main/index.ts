@@ -12,7 +12,7 @@
  * The renderer does the actual HTTP talking to the backend. The main process
  * stays out of business logic; it's a thin host for the window.
  */
-import { app, BrowserWindow, ipcMain, Menu, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, MenuItem, session, shell } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type {
@@ -88,7 +88,69 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // preload uses Node APIs (fs, path)
+      spellcheck: true,
     },
+  });
+
+  // English spellcheck by default. The user's system language wins if it's
+  // a Chromium-supported locale; otherwise fall back to en-GB.
+  try {
+    const sys = app.getLocale();
+    const available = mainWindow.webContents.session.availableSpellCheckerLanguages;
+    const lang = available.includes(sys) ? sys : "en-GB";
+    mainWindow.webContents.session.setSpellCheckerLanguages([lang]);
+    mainWindow.webContents.session.setSpellCheckerEnabled(true);
+  } catch {
+    /* spellcheck is optional — don't crash the window if Chromium hasn't bundled the dictionary */
+  }
+
+  // Right-click context menu for text inputs/textareas. Shows spelling
+  // suggestions when available, plus the usual edit actions.
+  mainWindow.webContents.on("context-menu", (_e, params) => {
+    const menu = new Menu();
+    if (params.misspelledWord) {
+      for (const suggestion of params.dictionarySuggestions) {
+        menu.append(
+          new MenuItem({
+            label: suggestion,
+            click: () => mainWindow?.webContents.replaceMisspelling(suggestion),
+          }),
+        );
+      }
+      if (params.dictionarySuggestions.length > 0) {
+        menu.append(new MenuItem({ type: "separator" }));
+      }
+      menu.append(
+        new MenuItem({
+          label: `Add “${params.misspelledWord}” to dictionary`,
+          click: () =>
+            mainWindow?.webContents.session.addWordToSpellCheckerDictionary(
+              params.misspelledWord,
+            ),
+        }),
+      );
+      menu.append(new MenuItem({ type: "separator" }));
+    }
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: "cut", enabled: params.editFlags.canCut }));
+      menu.append(new MenuItem({ role: "copy", enabled: params.editFlags.canCopy }));
+      menu.append(new MenuItem({ role: "paste", enabled: params.editFlags.canPaste }));
+      menu.append(new MenuItem({ role: "selectAll", enabled: params.editFlags.canSelectAll }));
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ role: "copy" }));
+      menu.append(new MenuItem({ role: "selectAll" }));
+    } else {
+      // No editable, no selection — still useful to have inspect in dev
+      if (isDev) {
+        menu.append(
+          new MenuItem({
+            label: "Inspect element",
+            click: () => mainWindow?.webContents.inspectElement(params.x, params.y),
+          }),
+        );
+      }
+    }
+    if (menu.items.length > 0) menu.popup({ window: mainWindow! });
   });
 
   mainWindow.once("ready-to-show", () => {

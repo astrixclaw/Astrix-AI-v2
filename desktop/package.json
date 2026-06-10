@@ -1,6 +1,6 @@
 {
   "name": "astrix-home",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Astrix Home — household AI assistant, multi-user, Hue + group chat.",
   "private": true,
   "author": "Si & Astrix",

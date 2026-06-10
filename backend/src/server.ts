@@ -16,6 +16,7 @@ import { chatRoutes } from "./routes/chat.js";
 import { groupChatRoutes } from "./routes/group_chat.js";
 import { lightingRoutes } from "./routes/lighting.js";
 import { purgeOrphanAttachments } from "./services/attachments.js";
+import { purgeGroupOrphanAttachments } from "./services/group_attachments.js";
 import { purgeExpiredSessions } from "./services/auth.js";
 
 const PORT = Number(process.env.PORT ?? 18800);
@@ -80,6 +81,8 @@ const purgeTimer = setInterval(purgeExpiredSessions, 5 * 60 * 1000);
 purgeTimer.unref();
 const orphanTimer = setInterval(purgeOrphanAttachments, 15 * 60 * 1000);
 orphanTimer.unref();
+const groupOrphanTimer = setInterval(purgeGroupOrphanAttachments, 15 * 60 * 1000);
+groupOrphanTimer.unref();
 
 // Never crash the whole process on a stray exception or rejection. The SSE
 // chat route used to die on socket-write-after-close; this is the final safety

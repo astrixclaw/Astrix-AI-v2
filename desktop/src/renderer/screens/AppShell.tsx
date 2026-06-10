@@ -16,7 +16,7 @@ import { Avatar } from "../components/Avatar";
 import { Chat } from "./Chat";
 import { GroupChat } from "./GroupChat";
 import { Lighting } from "./Lighting";
-import { Placeholder } from "./Placeholder";
+import { Profile } from "./Profile";
 import { Settings } from "./Settings";
 
 export function AppShell() {
@@ -100,15 +100,25 @@ export function AppShell() {
 
         <div style={{ flex: 1 }} />
 
-        <div
+        <button
+          onClick={() => setView("profile")}
+          title="Edit your profile"
           style={{
+            all: "unset",
             display: "flex",
             alignItems: "center",
             gap: "0.6rem",
             padding: "0.5rem",
             borderRadius: "var(--radius-md)",
-            background: "var(--bg-3)",
-            border: "1px solid var(--border)",
+            background:
+              view === "profile" ? "var(--bg-3)" : "var(--bg-3)",
+            border:
+              view === "profile"
+                ? "1px solid var(--accent)"
+                : "1px solid var(--border)",
+            cursor: "pointer",
+            outline:
+              view === "profile" ? "1px solid rgba(122,167,255,0.3)" : "none",
           }}
         >
           {user && (
@@ -132,10 +142,10 @@ export function AppShell() {
               {user?.username}
             </div>
             <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              {user?.is_admin ? "Admin" : "Member"}
+              {user?.is_admin ? "Admin" : "Member"} · edit profile
             </div>
           </div>
-        </div>
+        </button>
         <Button
           variant="ghost"
           onClick={() => void signOut()}
@@ -189,6 +199,8 @@ function Pane({ view }: { view: ViewName }) {
       return <Admin />;
     case "settings":
       return <Settings />;
+    case "profile":
+      return <Profile />;
   }
 }
 
