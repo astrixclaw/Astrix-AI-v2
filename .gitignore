@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+backend/dist/
+desktop/dist/
+desktop/release/
+
+# Runtime data
+*.db
+*.db-wal
+*.db-shm
+backend/astrix-home.db*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env / secrets (we don't ship a .env for this project, but just in case)
+.env
+.env.local
+*.local
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Test output
+coverage/
