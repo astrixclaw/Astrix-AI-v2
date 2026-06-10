@@ -13,6 +13,7 @@ import { hasPermission } from "../lib/perms";
 import { useView, type ViewName } from "../lib/view";
 import { Chat } from "./Chat";
 import { Placeholder } from "./Placeholder";
+import { Settings } from "./Settings";
 
 export function AppShell() {
   const { user, permissions, signOut } = useAuth();
@@ -191,7 +192,7 @@ function Pane({ view }: { view: ViewName }) {
     case "admin":
       return <Placeholder title="Admin" message="User & permission management lands in Phase 7." />;
     case "settings":
-      return <Placeholder title="Settings" message="App + gateway settings UI coming soon." />;
+      return <Settings />;
   }
 }
 

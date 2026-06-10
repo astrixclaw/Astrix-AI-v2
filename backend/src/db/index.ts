@@ -7,9 +7,9 @@
  * ASTRIX_HOME_DB.
  */
 import Database from "better-sqlite3";
-import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SCHEMA_SQL } from "./schema.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,7 +23,6 @@ db.pragma("foreign_keys = ON");
 db.pragma("journal_mode = WAL");
 
 // Apply the schema. CREATE TABLE IF NOT EXISTS makes this idempotent.
-const schema = readFileSync(join(__dirname, "schema.sql"), "utf8");
-db.exec(schema);
+db.exec(SCHEMA_SQL);
 
 console.log(`📂 SQLite ready at ${dbPath}`);
