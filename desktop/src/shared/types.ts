@@ -71,6 +71,11 @@ export interface GatewayConfig {
 
 // ---- Lighting (Philips Hue) ---------------------------------------------
 
+export interface HueScene {
+  id: string;
+  name: string;
+}
+
 export interface HueRoom {
   id: string;
   name: string;
@@ -78,6 +83,7 @@ export interface HueRoom {
   on: boolean;
   brightness: number | null;
   anyReachable: boolean;
+  scenes: HueScene[];
 }
 
 // ---- Group chat ---------------------------------------------------------

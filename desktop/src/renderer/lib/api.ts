@@ -162,6 +162,11 @@ export const api = {
       method: "POST",
       body: { brightness },
     }),
+  recallScene: (roomId: string, sceneId: string) =>
+    request<{ room: HueRoom }>(
+      `/api/lighting/rooms/${roomId}/scenes/${sceneId}`,
+      { method: "POST" },
+    ),
 
   // ---- admin: users ----
   listAdminUsers: () =>

@@ -280,7 +280,84 @@ function RoomCard({ room, onUpdate, onError }: CardProps) {
           cursor: isOn ? "pointer" : "not-allowed",
         }}
       />
+
+      <ScenePills room={room} onUpdate={onUpdate} onError={onError} />
     </motion.div>
+  );
+}
+
+/**
+ * Row of scene buttons under the slider.
+ *
+ * Hidden entirely when the room has no scenes (so Hallway-style rooms don't
+ * leave dead space). Each pill is just the scene name; on click we POST to
+ * the backend, which talks to the bridge and returns the fresh snapshot.
+ */
+function ScenePills({
+  room,
+  onUpdate,
+  onError,
+}: {
+  room: HueRoom;
+  onUpdate: (next: HueRoom) => void;
+  onError: (msg: string) => void;
+}) {
+  const [pending, setPending] = useState<string | null>(null);
+  if (!room.scenes || room.scenes.length === 0) return null;
+
+  const recall = async (sceneId: string, sceneName: string) => {
+    if (pending) return;
+    setPending(sceneId);
+    try {
+      const res = await api.recallScene(room.id, sceneId);
+      onUpdate(res.room);
+    } catch {
+      onError(`Could not apply “${sceneName}” to ${room.name}`);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.35rem",
+        marginTop: "0.6rem",
+      }}
+    >
+      {room.scenes.map((s) => {
+        const busy = pending === s.id;
+        return (
+          <motion.button
+            key={s.id}
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => void recall(s.id, s.name)}
+            disabled={!!pending}
+            title={`Apply “${s.name}”`}
+            style={{
+              padding: "0.28rem 0.65rem",
+              borderRadius: 999,
+              border: "1px solid var(--border-strong)",
+              background: busy
+                ? "rgba(255, 209, 109, 0.20)"
+                : "rgba(255, 255, 255, 0.04)",
+              color: "var(--text)",
+              fontSize: 12,
+              fontWeight: 500,
+              letterSpacing: "0.01em",
+              transition: "background 160ms var(--ease-out)",
+              cursor: pending ? "wait" : "pointer",
+              opacity: pending && !busy ? 0.55 : 1,
+            }}
+          >
+            {s.name}
+          </motion.button>
+        );
+      })}
+    </div>
   );
 }
 

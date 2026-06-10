@@ -91,6 +91,13 @@ export interface HueRoom {
   brightness: number | null;
   /** Whether any light is currently reachable — useful UX hint. */
   anyReachable: boolean;
+  /** Available scenes paired to this room. Empty array if none. */
+  scenes: HueScene[];
+}
+
+export interface HueScene {
+  id: string;
+  name: string;
 }
 
 // ---- Raw bridge shapes (only the fields we care about) ------------------
@@ -110,6 +117,12 @@ interface LightResource {
   id: string;
   on: { on: boolean };
   dimming?: { brightness: number };
+}
+
+interface SceneResource {
+  id: string;
+  metadata: { name: string };
+  group: { rid: string; rtype: string };
 }
 
 interface GroupedLight {
@@ -143,13 +156,14 @@ const SNAPSHOT_TTL_MS = 10_000;
  * We do all four in parallel.
  */
 async function buildSnapshot(): Promise<Snapshot> {
-  const [roomRes, deviceRes, lightRes, groupedRes] = await Promise.all([
+  const [roomRes, deviceRes, lightRes, groupedRes, sceneRes] = await Promise.all([
     hueFetch<{ data: RoomResource[] }>("/room"),
     hueFetch<{ data: DeviceResource[] }>("/device"),
     hueFetch<{ data: LightResource[] }>("/light"),
     hueFetch<{ data: (GroupedLight & { owner: { rid: string; rtype: string } })[] }>(
       "/grouped_light",
     ),
+    hueFetch<{ data: SceneResource[] }>("/scene"),
   ]);
 
   // Build lookup tables.
@@ -158,6 +172,15 @@ async function buildSnapshot(): Promise<Snapshot> {
   const groupedByRoom = new Map<string, GroupedLight>();
   for (const g of groupedRes.data) {
     if (g.owner?.rtype === "room") groupedByRoom.set(g.owner.rid, g);
+  }
+
+  // Group scenes by their owning room.
+  const scenesByRoom = new Map<string, HueScene[]>();
+  for (const s of sceneRes.data) {
+    if (s.group?.rtype !== "room") continue;
+    const list = scenesByRoom.get(s.group.rid) ?? [];
+    list.push({ id: s.id, name: s.metadata.name });
+    scenesByRoom.set(s.group.rid, list);
   }
 
   const rooms: HueRoom[] = [];
@@ -191,6 +214,10 @@ async function buildSnapshot(): Promise<Snapshot> {
       }
     }
 
+    const scenes = (scenesByRoom.get(room.id) ?? [])
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     rooms.push({
       id: room.id,
       name: room.metadata.name,
@@ -198,6 +225,7 @@ async function buildSnapshot(): Promise<Snapshot> {
       on,
       brightness: brightCount ? Math.round(brightSum / brightCount) : null,
       anyReachable: reachable,
+      scenes,
     });
 
     const grouped = groupedByRoom.get(room.id);
@@ -261,6 +289,31 @@ export async function setRoomBrightness(
   await hueFetch(`/grouped_light/${gid}`, {
     method: "PUT",
     body: { on: { on: b > 0 }, dimming: { brightness: b } },
+  });
+  snapshot = null;
+}
+
+/**
+ * Apply ("recall") a scene to a room. The Hue v2 API does this by PUT-ing
+ * `recall: { action: "active" }` to the scene resource itself. We also
+ * verify the scene actually belongs to the room the caller named, so a
+ * lighting-permission check on the room translates correctly — you can't
+ * recall the Bedroom "Relax" scene through a route that authorised you for
+ * Office only.
+ */
+export async function recallScene(
+  roomId: string,
+  sceneId: string,
+): Promise<void> {
+  const snap = await getSnapshot();
+  const room = snap.rooms.find((r) => r.id === roomId);
+  if (!room) throw new Error("unknown_room");
+  if (!room.scenes.some((s) => s.id === sceneId)) {
+    throw new Error("scene_not_in_room");
+  }
+  await hueFetch(`/scene/${sceneId}`, {
+    method: "PUT",
+    body: { recall: { action: "active" } },
   });
   snapshot = null;
 }

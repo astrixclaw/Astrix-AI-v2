@@ -17,6 +17,7 @@ import { requireAuth } from "../middleware/auth.js";
 import {
   getSnapshot,
   isHueConfigured,
+  recallScene,
   setRoomBrightness,
   setRoomOn,
 } from "../services/hue.js";
@@ -102,6 +103,36 @@ export async function lightingRoutes(app: FastifyInstance) {
         return reply
           .code(502)
           .send({ error: e instanceof Error ? e.message : "hue_error" });
+      }
+    },
+  );
+
+  // Recall a scene. Permission is checked against the room (the same
+  // `lighting:<roomId>` grant that lets you toggle / dim that room covers
+  // every scene that belongs to it).
+  app.post<{ Params: { id: string; sceneId: string } }>(
+    "/api/lighting/rooms/:id/scenes/:sceneId",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      if (denyIfNotConfigured(reply)) return;
+      const { id: roomId, sceneId } = req.params;
+      if (!hasPermission(req.user!.id, FEATURES.LIGHTING, roomId)) {
+        return reply.code(403).send({ error: "no_permission_room" });
+      }
+      try {
+        await recallScene(roomId, sceneId);
+        const snap = await getSnapshot(true);
+        const room = snap.rooms.find((r) => r.id === roomId);
+        return { room };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "hue_error";
+        // The service throws "scene_not_in_room" for cross-room recall attempts,
+        // which we surface as 400 rather than 502 — it's a client mistake, not
+        // a bridge failure.
+        if (msg === "scene_not_in_room" || msg === "unknown_room") {
+          return reply.code(400).send({ error: msg });
+        }
+        return reply.code(502).send({ error: msg });
       }
     },
   );
