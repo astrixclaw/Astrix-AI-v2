@@ -13,7 +13,10 @@ import { PinDots } from "../components/PinDots";
 import { Wordmark } from "../components/Wordmark";
 import { useAuth } from "../lib/auth";
 
-const PIN_LEN = 4;
+// PIN length is whatever the user (or admin) chose between 4 and 12 digits.
+// We mirror the backend's validator here: 4 minimum, 12 maximum.
+const PIN_MIN = 4;
+const PIN_MAX = 12;
 
 export function Login() {
   const { signIn, config } = useAuth();
@@ -23,7 +26,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
 
   function digitsOnly(s: string) {
-    return s.replace(/\D/g, "").slice(0, PIN_LEN);
+    return s.replace(/\D/g, "").slice(0, PIN_MAX);
   }
 
   async function onSignIn() {
@@ -38,7 +41,10 @@ export function Login() {
     }
   }
 
-  const canSubmit = username.trim().length > 0 && pin.length === PIN_LEN;
+  const canSubmit =
+    username.trim().length > 0 &&
+    pin.length >= PIN_MIN &&
+    pin.length <= PIN_MAX;
 
   return (
     <CenterCard>
@@ -97,14 +103,19 @@ export function Login() {
         onChange={(e) => setPin(digitsOnly(e.target.value))}
         placeholder="••••"
         style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 18 }}
-        maxLength={PIN_LEN}
+        maxLength={PIN_MAX}
         autoComplete="off"
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSubmit) void onSignIn();
         }}
       />
       <div style={{ margin: "0.6rem 0 0.4rem" }}>
-        <PinDots length={PIN_LEN} filled={pin.length} />
+        {/*
+         * Show as many dots as the user has typed (capped at PIN_MAX). When
+         * we don't know the actual PIN length yet, this is a friendlier than
+         * showing a hard-coded 4-dot row that misleads people on longer PINs.
+         */}
+        <PinDots length={Math.max(PIN_MIN, pin.length || PIN_MIN)} filled={pin.length} />
       </div>
 
       {error && (

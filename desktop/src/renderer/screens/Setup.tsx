@@ -16,7 +16,9 @@ import { PinDots } from "../components/PinDots";
 import { Wordmark } from "../components/Wordmark";
 import { useAuth } from "../lib/auth";
 
-const PIN_LEN = 4;
+// Variable-length PINs: 4 to 12 digits, matching the backend validator.
+const PIN_MIN = 4;
+const PIN_MAX = 12;
 
 export function Setup() {
   const { runSetup } = useAuth();
@@ -28,13 +30,13 @@ export function Setup() {
   const [error, setError] = useState<string | null>(null);
 
   function digitsOnly(s: string) {
-    return s.replace(/\D/g, "").slice(0, PIN_LEN);
+    return s.replace(/\D/g, "").slice(0, PIN_MAX);
   }
 
   async function onCreate() {
     setError(null);
-    if (pin.length < PIN_LEN) {
-      setError(`PIN must be ${PIN_LEN} digits.`);
+    if (pin.length < PIN_MIN) {
+      setError(`PIN must be at least ${PIN_MIN} digits.`);
       return;
     }
     if (pin !== confirm) {
@@ -128,7 +130,7 @@ export function Setup() {
                 color: "var(--text-dim)",
               }}
             >
-              Choose a {PIN_LEN}-digit PIN for{" "}
+              Choose a {PIN_MIN}–{PIN_MAX} digit PIN for{" "}
               <strong style={{ color: "var(--text)" }}>{username}</strong>.
             </p>
 
@@ -140,10 +142,13 @@ export function Setup() {
               onChange={(e) => setPin(digitsOnly(e.target.value))}
               placeholder="••••"
               style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 18 }}
-              maxLength={PIN_LEN}
+              maxLength={PIN_MAX}
             />
             <div style={{ margin: "0.6rem 0 1rem" }}>
-              <PinDots length={PIN_LEN} filled={pin.length} />
+              <PinDots
+                length={Math.max(PIN_MIN, pin.length || PIN_MIN)}
+                filled={pin.length}
+              />
             </div>
 
             <label
@@ -166,7 +171,7 @@ export function Setup() {
               onChange={(e) => setConfirm(digitsOnly(e.target.value))}
               placeholder="••••"
               style={{ textAlign: "center", letterSpacing: "0.5em", fontSize: 18 }}
-              maxLength={PIN_LEN}
+              maxLength={PIN_MAX}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void onCreate();
               }}
