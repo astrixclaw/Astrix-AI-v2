@@ -12,6 +12,9 @@ desktop/release/
 *.db-wal
 *.db-shm
 backend/astrix-home.db*
+backend/data/avatars/
+backend/data/attachments/
+backend/data/group_attachments/
 
 # Logs
 *.log
