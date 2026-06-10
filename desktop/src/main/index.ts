@@ -82,7 +82,7 @@ function createMainWindow() {
     show: false, // we show after `ready-to-show` to avoid the white flash
     backgroundColor: "#0b0d12",
     title: "Astrix Home",
-    icon: join(__dirname, "..", "..", "assets", "icon-256.png"),
+    icon: join(__dirname, "..", "..", "..", "assets", "icon-256.png"),
     webPreferences: {
       preload: join(__dirname, "..", "preload", "index.js"),
       contextIsolation: true,
@@ -105,9 +105,15 @@ function createMainWindow() {
     void mainWindow.loadURL("http://localhost:5173/");
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    void mainWindow.loadFile(
-      join(__dirname, "..", "renderer", "index.html"),
-    );
+    // Path math (relative to this file at runtime):
+    //   __dirname = .../app.asar/dist/main/main
+    //   target    = .../app.asar/dist/renderer/index.html
+    // So we go up two: out of `main`, out of `main` again, then into `renderer`.
+    const rendererHtml = join(__dirname, "..", "..", "renderer", "index.html");
+    console.log("[astrix-home] loading renderer from", rendererHtml);
+    mainWindow.loadFile(rendererHtml).catch((err) => {
+      console.error("[astrix-home] loadFile failed:", err);
+    });
   }
 }
 
