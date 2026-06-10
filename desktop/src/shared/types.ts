@@ -69,6 +69,17 @@ export interface GatewayConfig {
   agent: string;
 }
 
+// ---- Lighting (Philips Hue) ---------------------------------------------
+
+export interface HueRoom {
+  id: string;
+  name: string;
+  archetype: string | null;
+  on: boolean;
+  brightness: number | null;
+  anyReachable: boolean;
+}
+
 // ---- IPC: what the preload exposes on window.api ------------------------
 
 export interface ApiBridge {

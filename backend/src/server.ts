@@ -10,6 +10,7 @@ import Fastify from "fastify";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
 import { chatRoutes } from "./routes/chat.js";
+import { lightingRoutes } from "./routes/lighting.js";
 import { purgeExpiredSessions } from "./services/auth.js";
 
 const PORT = Number(process.env.PORT ?? 18800);
@@ -44,6 +45,7 @@ await app.register(cors, { origin: true, credentials: false });
 
 await app.register(authRoutes);
 await app.register(chatRoutes);
+await app.register(lightingRoutes);
 await app.register(adminRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));

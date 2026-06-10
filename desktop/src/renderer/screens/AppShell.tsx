@@ -12,6 +12,7 @@ import { useAuth } from "../lib/auth";
 import { hasPermission } from "../lib/perms";
 import { useView, type ViewName } from "../lib/view";
 import { Chat } from "./Chat";
+import { Lighting } from "./Lighting";
 import { Placeholder } from "./Placeholder";
 import { Settings } from "./Settings";
 
@@ -186,7 +187,7 @@ function Pane({ view }: { view: ViewName }) {
     case "chat":
       return <Chat />;
     case "lighting":
-      return <Placeholder title="Lighting" message="Hue controls land in Phase 5." />;
+      return <Lighting />;
     case "group":
       return <Placeholder title="Group Chat" message="Household chat lands in Phase 6." />;
     case "admin":

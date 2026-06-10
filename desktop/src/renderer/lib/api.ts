@@ -11,6 +11,7 @@ import type {
   ChatStreamEvent,
   ConversationSummary,
   GatewayConfig,
+  HueRoom,
   Permission,
   SessionInfo,
   User,
@@ -144,6 +145,19 @@ export const api = {
     request<GatewayConfig>("/api/admin/gateway"),
   setGatewayConfig: (patch: Partial<GatewayConfig>) =>
     request<GatewayConfig>("/api/admin/gateway", { method: "PATCH", body: patch }),
+
+  // ---- lighting ----
+  listRooms: () => request<{ rooms: HueRoom[] }>("/api/lighting/rooms"),
+  setRoomOn: (id: string, on: boolean) =>
+    request<{ room: HueRoom }>(`/api/lighting/rooms/${id}/on`, {
+      method: "POST",
+      body: { on },
+    }),
+  setRoomBrightness: (id: string, brightness: number) =>
+    request<{ room: HueRoom }>(`/api/lighting/rooms/${id}/brightness`, {
+      method: "POST",
+      body: { brightness },
+    }),
 };
 
 /**
