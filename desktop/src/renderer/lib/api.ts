@@ -196,6 +196,15 @@ export const api = {
   deleteAdminUser: (id: string) =>
     request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
 
+  // ---- avatars ----
+  uploadOwnAvatar: async (file: File) => uploadAvatar("/api/me/avatar", file),
+  uploadUserAvatar: async (id: string, file: File) =>
+    uploadAvatar(`/api/admin/users/${id}/avatar`, file),
+  deleteOwnAvatar: () =>
+    request<{ ok: true }>("/api/me/avatar", { method: "DELETE" }),
+  deleteUserAvatar: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/avatar`, { method: "DELETE" }),
+
   // ---- group chat ----
   listGroupMessages: (limit = 50, before?: number) => {
     const q = new URLSearchParams({ limit: String(limit) });
@@ -216,6 +225,37 @@ export function openGroupSocket(): WebSocket {
   url.pathname = "/api/group/ws";
   if (_token) url.searchParams.set("token", _token);
   return new WebSocket(url.toString());
+}
+
+/**
+ * Upload a single image file as a raw image body. We avoid multipart on the
+ * client because the desktop's File API gives us a clean Blob; the backend
+ * accepts both. Auth comes from the in-memory _token.
+ */
+async function uploadAvatar(
+  path: string,
+  file: File,
+): Promise<{ ok: true; bytes: number }> {
+  const headers: Record<string, string> = {
+    "Content-Type": file.type || "image/png",
+  };
+  if (_token) headers.Authorization = `Bearer ${_token}`;
+  const res = await fetch(`${getBaseUrl()}${path}`, {
+    method: "POST",
+    headers,
+    body: file,
+  });
+  if (!res.ok) {
+    let code = `http_${res.status}`;
+    try {
+      const j = (await res.json()) as { error?: string };
+      if (j?.error) code = j.error;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(code, res.status);
+  }
+  return (await res.json()) as { ok: true; bytes: number };
 }
 
 /**

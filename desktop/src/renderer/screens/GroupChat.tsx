@@ -21,6 +21,7 @@
  */
 import { motion, AnimatePresence } from "framer-motion";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Avatar as UserAvatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
@@ -356,10 +357,9 @@ function Bubble({
       }}
     >
       {!isMe && (
-        <Avatar
-          username={msg.username}
-          show={!stack}
-        />
+        stack ? <div style={{ width: 28 }} /> : (
+          <UserAvatar userId={msg.user_id} username={msg.username} size={28} />
+        )
       )}
       {isMe && <div style={{ width: 28 }} />}
 
@@ -403,29 +403,6 @@ function Bubble({
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function Avatar({ username, show }: { username: string; show: boolean }) {
-  if (!show) return <div style={{ width: 28 }} />;
-  return (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: "50%",
-        background: avatarColor(username),
-        display: "grid",
-        placeItems: "center",
-        fontWeight: 700,
-        fontSize: 12,
-        color: "#0b0d12",
-        flexShrink: 0,
-        marginBottom: 2,
-      }}
-    >
-      {username.charAt(0).toUpperCase()}
-    </div>
   );
 }
 
@@ -615,16 +592,6 @@ function dayLabel(d: Date): string {
     day: "numeric",
     year: sameYear ? undefined : "numeric",
   });
-}
-
-/** Deterministic gradient avatar based on the username. */
-function avatarColor(username: string): string {
-  let h = 0;
-  for (let i = 0; i < username.length; i++) {
-    h = (h * 31 + username.charCodeAt(i)) >>> 0;
-  }
-  const hue = h % 360;
-  return `linear-gradient(135deg, hsl(${hue} 70% 70%), hsl(${(hue + 50) % 360} 70% 60%))`;
 }
 
 function prettyError(code: string): string {

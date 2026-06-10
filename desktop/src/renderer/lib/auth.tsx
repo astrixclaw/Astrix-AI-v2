@@ -36,6 +36,9 @@ interface AuthCtx extends AuthState {
   signOut: () => Promise<void>;
   /** Re-run the initial probe (handy after the user fixes the backend URL). */
   reprobe: () => Promise<void>;
+  /** Bump after any avatar upload so <Avatar> reloads the image. */
+  bumpAvatarVersion: () => void;
+  avatarVersion: number;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -181,6 +184,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const bumpAvatarVersion = useCallback(() => {
+    setAvatarVersion((v) => v + 1);
+  }, []);
+
   const value = useMemo<AuthCtx>(
     () => ({
       ...state,
@@ -189,8 +197,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       runSetup,
       signOut,
       reprobe: probe,
+      avatarVersion,
+      bumpAvatarVersion,
     }),
-    [state, setConfig, signIn, runSetup, signOut, probe],
+    [state, setConfig, signIn, runSetup, signOut, probe, avatarVersion, bumpAvatarVersion],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

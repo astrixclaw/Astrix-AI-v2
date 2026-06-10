@@ -12,6 +12,7 @@ import { useAuth } from "../lib/auth";
 import { hasPermission } from "../lib/perms";
 import { useView, type ViewName } from "../lib/view";
 import { Admin } from "./Admin";
+import { Avatar } from "../components/Avatar";
 import { Chat } from "./Chat";
 import { GroupChat } from "./GroupChat";
 import { Lighting } from "./Lighting";
@@ -19,7 +20,7 @@ import { Placeholder } from "./Placeholder";
 import { Settings } from "./Settings";
 
 export function AppShell() {
-  const { user, permissions, signOut } = useAuth();
+  const { user, permissions, signOut, avatarVersion } = useAuth();
   const { view, setView } = useView();
 
   const showChat = hasPermission(user, permissions, "chat");
@@ -110,22 +111,14 @@ export function AppShell() {
             border: "1px solid var(--border)",
           }}
         >
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: "50%",
-              background:
-                "linear-gradient(135deg, var(--violet), var(--cyan))",
-              display: "grid",
-              placeItems: "center",
-              fontWeight: 700,
-              fontSize: 13,
-              color: "#0b0d12",
-            }}
-          >
-            {user?.username.charAt(0).toUpperCase()}
-          </div>
+          {user && (
+            <Avatar
+              userId={user.id}
+              username={user.username}
+              size={30}
+              version={avatarVersion}
+            />
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{

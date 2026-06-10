@@ -18,7 +18,8 @@
  * admin users and we mirror that here with greyed-out controls.
  */
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Avatar as UserAvatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
@@ -266,22 +267,7 @@ function UserRow({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            background:
-              "linear-gradient(135deg, var(--violet), var(--cyan))",
-            display: "grid",
-            placeItems: "center",
-            fontWeight: 700,
-            color: "#0b0d12",
-            fontSize: 13,
-          }}
-        >
-          {user.username.charAt(0).toUpperCase()}
-        </div>
+        <UserAvatar userId={user.id} username={user.username} size={30} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 13.5 }}>{user.username}</div>
           {isSelf && (
@@ -410,22 +396,11 @@ function UserDrawer({
     >
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: "50%",
-            background:
-              "linear-gradient(135deg, var(--violet), var(--cyan))",
-            display: "grid",
-            placeItems: "center",
-            fontWeight: 700,
-            color: "#0b0d12",
-            fontSize: 16,
-          }}
-        >
-          {user.username.charAt(0).toUpperCase()}
-        </div>
+        <AvatarEditor
+          user={user}
+          isSelf={isSelf}
+          onChanged={onChanged}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 17 }}>{user.username}</div>
           <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
@@ -928,6 +903,128 @@ function FieldHint({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Clickable avatar in the drawer header. Opens a file picker on click; on
+ * file select, uploads via /api/me/avatar (when editing self) or
+ * /api/admin/users/:id/avatar (when editing someone else).
+ *
+ * Long-press / right-click would be a fine way to delete, but for now we
+ * just expose an explicit × button below the avatar.
+ */
+function AvatarEditor({
+  user,
+  isSelf,
+  onChanged,
+}: {
+  user: AdminUserView;
+  isSelf: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const { bumpAvatarVersion, avatarVersion } = useAuth();
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (isSelf) await api.uploadOwnAvatar(file);
+      else await api.uploadUserAvatar(user.id, file);
+      bumpAvatarVersion();
+      await onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : "upload_failed");
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  }
+
+  async function clear() {
+    setBusy(true);
+    setError(null);
+    try {
+      if (isSelf) await api.deleteOwnAvatar();
+      else await api.deleteUserAvatar(user.id);
+      bumpAvatarVersion();
+      await onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.code : "delete_failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        title="Upload new avatar"
+        style={{
+          position: "relative",
+          padding: 0,
+          border: 0,
+          background: "transparent",
+          cursor: busy ? "wait" : "pointer",
+          borderRadius: "50%",
+          outline: "none",
+        }}
+      >
+        <UserAvatar userId={user.id} username={user.username} size={40} version={avatarVersion} />
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            background: "rgba(0,0,0,0.45)",
+            display: "grid",
+            placeItems: "center",
+            color: "white",
+            fontSize: 10,
+            opacity: 0,
+            transition: "opacity 120ms var(--ease-out)",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
+        >
+          edit
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        hidden
+        onChange={(e) => void onPick(e)}
+      />
+      <button
+        onClick={() => void clear()}
+        disabled={busy}
+        style={{
+          fontSize: 10,
+          color: "var(--text-faint)",
+          padding: 0,
+          background: "transparent",
+          border: 0,
+          cursor: busy ? "wait" : "pointer",
+        }}
+      >
+        clear
+      </button>
+      {error && (
+        <span style={{ fontSize: 10, color: "var(--danger)" }} title={error}>
+          {humanError(error)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function NotAllowed() {
   return (
     <div style={{ flex: 1, display: "grid", placeItems: "center", padding: "2rem" }}>
@@ -958,6 +1055,13 @@ function humanError(code: string): string {
       return "You can't delete your own account.";
     case "not_found":
       return "Member no longer exists.";
+    case "too_large":
+      return "Image is too large (max 5 MB).";
+    case "bad_image":
+    case "upload_failed":
+      return "Could not read that image. Try a PNG or JPEG.";
+    case "delete_failed":
+      return "Could not clear avatar.";
     default:
       return code.replace(/_/g, " ");
   }

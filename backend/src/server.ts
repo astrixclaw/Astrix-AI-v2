@@ -6,10 +6,12 @@
  * 0.0.0.0 so LAN clients can reach the service.
  */
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import { adminRoutes } from "./routes/admin.js";
 import { authRoutes } from "./routes/auth.js";
+import { avatarRoutes } from "./routes/avatars.js";
 import { chatRoutes } from "./routes/chat.js";
 import { groupChatRoutes } from "./routes/group_chat.js";
 import { lightingRoutes } from "./routes/lighting.js";
@@ -46,10 +48,25 @@ app.addContentTypeParser(
 await app.register(cors, { origin: true, credentials: false });
 
 await app.register(websocket);
+await app.register(multipart, {
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+
+// Accept raw image bodies for the avatar upload route. Each MIME we want to
+// support has to be registered separately on Fastify's content-type parser.
+for (const mime of ["image/jpeg", "image/png", "image/webp"]) {
+  app.addContentTypeParser(
+    mime,
+    { parseAs: "buffer" },
+    (_req, body, done) => done(null, body),
+  );
+}
+
 await app.register(authRoutes);
 await app.register(chatRoutes);
 await app.register(lightingRoutes);
 await app.register(groupChatRoutes);
+await app.register(avatarRoutes);
 await app.register(adminRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
