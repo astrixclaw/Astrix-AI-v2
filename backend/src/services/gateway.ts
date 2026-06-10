@@ -1,16 +1,24 @@
 /**
  * OpenClaw gateway client.
  *
- * Talks to the upstream OpenClaw `/agent/turn` SSE endpoint and re-emits
- * each delta to our caller. We do almost no transformation — the desktop app
- * gets a clean async iterator of text chunks plus a final done event.
+ * Talks to the OpenAI-compatible `/v1/chat/completions` endpoint on the
+ * OpenClaw gateway. We stream SSE deltas through to our own SSE response so
+ * the desktop sees text as it lands.
  *
- * Per-user identity is baked in by prepending a system message naming the
- * household member who is talking. The gateway has its own USER.md/SOUL.md,
- * but the system message wins on identity since it's sent every turn.
+ * Important contract notes (learned the hard way):
+ *  - The `model` field must be `openclaw` or `openclaw/<agentId>` — the
+ *    gateway picks the actual LLM from the agent's config, not from this
+ *    field. We default to `openclaw/main` unless the admin sets a different
+ *    agent.
+ *  - SSE events look like:
+ *        data: {"choices":[{"delta":{"content":"..."}}]}
+ *        ...
+ *        data: [DONE]
+ *  - Per-user identity comes from a prepended `system` message naming the
+ *    household member. The agent's USER.md / SOUL.md fill in the rest.
  *
- * If the gateway isn't configured (no URL set yet), we throw a typed error
- * the route layer can convert into a friendly 503.
+ * If the gateway URL isn't set, we throw GatewayNotConfiguredError and let
+ * the route layer translate to a friendly error event.
  */
 import { getGatewayConfig } from "./settings.js";
 
@@ -40,10 +48,17 @@ export interface StreamChunk {
   error?: string;
 }
 
+/** Build the OpenClaw model string from the configured agent. */
+function modelFor(agent: string): string {
+  const a = agent.trim();
+  if (!a || a === "openclaw") return "openclaw";
+  if (a.startsWith("openclaw/")) return a;
+  return `openclaw/${a}`;
+}
+
 /**
  * Stream a chat turn. Yields `delta` chunks as text arrives, ends with `done`,
- * or yields `error` and stops. Caller decides how to surface to the client
- * (we re-emit as SSE in the route).
+ * or yields `error` and stops.
  */
 export async function* streamChatTurn(opts: {
   username: string;
@@ -56,12 +71,11 @@ export async function* streamChatTurn(opts: {
     throw new GatewayNotConfiguredError();
   }
 
-  // Prepend the per-user identity hint. Keep it short — the gateway's own
-  // SOUL.md / USER.md fill in the rest.
+  // Per-user identity hint goes in as a system message every turn.
   const messages: GatewayMessage[] = [
     {
       role: "system",
-      content: `You are chatting with the household member named "${opts.username}". Address them by name.`,
+      content: `You are chatting with the household member named "${opts.username}". Address them by name when natural; don't overuse it.`,
     },
     ...opts.history,
     { role: "user", content: opts.newUserMessage },
@@ -75,16 +89,19 @@ export async function* streamChatTurn(opts: {
 
   let res: Response;
   try {
-    res = await fetch(`${cfg.url.replace(/\/+$/, "")}/agent/turn`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        agent: cfg.agent,
-        messages,
-        stream: true,
-      }),
-      signal: opts.signal,
-    });
+    res = await fetch(
+      `${cfg.url.replace(/\/+$/, "")}/v1/chat/completions`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: modelFor(cfg.agent || "main"),
+          messages,
+          stream: true,
+        }),
+        signal: opts.signal,
+      },
+    );
   } catch (e) {
     throw new GatewayError(
       0,
@@ -97,8 +114,7 @@ export async function* streamChatTurn(opts: {
     throw new GatewayError(res.status, body || `http_${res.status}`);
   }
 
-  // The gateway speaks SSE: lines of `data: <json>` separated by blank lines.
-  // We buffer, split on \n\n, and forward each event's payload.
+  // Parse SSE: blocks separated by blank lines; each line starts with `data:`.
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -111,32 +127,46 @@ export async function* streamChatTurn(opts: {
 
       let sep: number;
       while ((sep = buffer.indexOf("\n\n")) >= 0) {
-        const event = buffer.slice(0, sep).trim();
+        const event = buffer.slice(0, sep);
         buffer = buffer.slice(sep + 2);
-        if (!event.startsWith("data:")) continue;
-        const payload = event.slice(5).trim();
+
+        // An event can have multiple `data:` lines; concat them.
+        const dataLines: string[] = [];
+        for (const line of event.split("\n")) {
+          const trimmed = line.replace(/^\r/, "");
+          if (trimmed.startsWith("data:")) dataLines.push(trimmed.slice(5).trim());
+        }
+        if (dataLines.length === 0) continue;
+        const payload = dataLines.join("\n");
+
         if (payload === "[DONE]") {
           yield { kind: "done" };
           return;
         }
+
         try {
-          const parsed = JSON.parse(payload) as
-            | { delta?: string; text?: string; done?: boolean; error?: string };
+          const parsed = JSON.parse(payload) as {
+            choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
+            error?: { message?: string };
+          };
           if (parsed.error) {
-            yield { kind: "error", error: parsed.error };
+            yield { kind: "error", error: parsed.error.message ?? "gateway_error" };
             return;
           }
-          if (parsed.done) {
-            yield { kind: "done" };
-            return;
-          }
-          const text = parsed.delta ?? parsed.text;
+          const choice = parsed.choices?.[0];
+          const text = choice?.delta?.content;
           if (typeof text === "string" && text.length > 0) {
             yield { kind: "delta", text };
           }
+          if (choice?.finish_reason && choice.finish_reason !== null) {
+            // Most providers also send `[DONE]` after the final chunk; treat
+            // either signal as end-of-stream.
+            yield { kind: "done" };
+            return;
+          }
         } catch {
-          // Forward any unparseable line as raw text — better than swallowing.
-          if (payload) yield { kind: "delta", text: payload };
+          // Ignore malformed events — the gateway shouldn't emit them, but if
+          // it does we'd rather miss one delta than crash the whole stream.
         }
       }
     }
