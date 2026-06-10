@@ -106,16 +106,43 @@ export async function chatRoutes(app: FastifyInstance) {
         "X-Accel-Buffering": "no", // disable nginx-style buffering if proxied
       });
 
+      // Track client disconnect so we (a) abort the upstream fetch, and
+      // (b) stop writing to a dead socket. Without this guard, writing after
+      // close emits an 'error' on the raw socket; with no listener attached
+      // Node would otherwise crash the process. That's why the backend kept
+      // dying mid-chat.
+      let closed = false;
+      req.raw.on("close", () => {
+        closed = true;
+        abort.abort();
+      });
+      // Defensive: swallow any late socket errors so they can't bubble up
+      // into an uncaughtException. Logged at debug level only.
+      reply.raw.on("error", (err) => {
+        req.log.debug({ err }, "sse socket error (ignored)");
+      });
+
       const send = (event: object) => {
-        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (closed || reply.raw.writableEnded) return;
+        try {
+          reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        } catch (err) {
+          req.log.debug({ err }, "sse write failed (ignored)");
+        }
+      };
+
+      const endResponse = () => {
+        if (reply.raw.writableEnded) return;
+        try {
+          reply.raw.end();
+        } catch (err) {
+          req.log.debug({ err }, "sse end failed (ignored)");
+        }
       };
 
       // Tell the client up-front that the user message was saved.
-      send({ type: "user_saved", message: userMessage });
-
-      // If the client disconnects mid-stream we want to stop hitting the gateway.
       const abort = new AbortController();
-      req.raw.on("close", () => abort.abort());
+      send({ type: "user_saved", message: userMessage });
 
       let assembled = "";
       try {
@@ -125,12 +152,13 @@ export async function chatRoutes(app: FastifyInstance) {
           newUserMessage: text,
           signal: abort.signal,
         })) {
+          if (closed) break;
           if (chunk.kind === "delta" && chunk.text) {
             assembled += chunk.text;
             send({ type: "delta", text: chunk.text });
           } else if (chunk.kind === "error") {
             send({ type: "error", error: chunk.error ?? "gateway_error" });
-            reply.raw.end();
+            endResponse();
             return;
           } else if (chunk.kind === "done") {
             break;
@@ -139,21 +167,36 @@ export async function chatRoutes(app: FastifyInstance) {
 
         // Save the assistant turn even if it's empty — that way the client
         // can tell "the gateway returned nothing" from "we never got there".
-        const assistant = appendMessage(user.id, convId, "assistant", assembled);
-        send({ type: "done", message: assistant });
+        // Skip if we already persisted text (assembled is non-empty), so
+        // canceling mid-stream still gets the partial reply saved.
+        if (assembled || !closed) {
+          const assistant = appendMessage(
+            user.id,
+            convId,
+            "assistant",
+            assembled,
+          );
+          send({ type: "done", message: assistant });
+        }
       } catch (e) {
-        if (e instanceof GatewayNotConfiguredError) {
-          send({ type: "error", error: "gateway_not_configured" });
-        } else if (e instanceof GatewayError) {
-          send({ type: "error", error: e.message });
-        } else {
-          send({
-            type: "error",
-            error: e instanceof Error ? e.message : "unknown_error",
-          });
+        // AbortError on client disconnect is expected; do nothing.
+        const isAbort =
+          (e as { name?: string })?.name === "AbortError" ||
+          closed;
+        if (!isAbort) {
+          if (e instanceof GatewayNotConfiguredError) {
+            send({ type: "error", error: "gateway_not_configured" });
+          } else if (e instanceof GatewayError) {
+            send({ type: "error", error: e.message });
+          } else {
+            send({
+              type: "error",
+              error: e instanceof Error ? e.message : "unknown_error",
+            });
+          }
         }
       } finally {
-        reply.raw.end();
+        endResponse();
       }
     },
   );

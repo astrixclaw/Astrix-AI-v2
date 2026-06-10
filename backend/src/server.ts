@@ -54,6 +54,17 @@ app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
 const purgeTimer = setInterval(purgeExpiredSessions, 5 * 60 * 1000);
 purgeTimer.unref();
 
+// Never crash the whole process on a stray exception or rejection. The SSE
+// chat route used to die on socket-write-after-close; this is the final safety
+// net so anything else like it keeps us up instead of taking the household
+// down. We still log loudly so we can fix the underlying cause.
+process.on("uncaughtException", (err) => {
+  app.log.error({ err }, "uncaughtException (process kept alive)");
+});
+process.on("unhandledRejection", (reason) => {
+  app.log.error({ err: reason }, "unhandledRejection (process kept alive)");
+});
+
 try {
   await app.listen({ port: PORT, host: HOST });
   app.log.info(`🚀 Astrix Home backend listening on ${HOST}:${PORT}`);
