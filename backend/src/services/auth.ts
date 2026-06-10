@@ -80,6 +80,12 @@ const stmts = {
   updatePinHash: db.prepare(`
     UPDATE users SET pin_hash = ?, updated_at = ? WHERE id = ?
   `),
+  updateAdmin: db.prepare(`
+    UPDATE users SET is_admin = ?, updated_at = ? WHERE id = ?
+  `),
+  updateAvatar: db.prepare(`
+    UPDATE users SET avatar = ?, updated_at = ? WHERE id = ?
+  `),
   countAdmins: db.prepare(`SELECT COUNT(*) AS n FROM users WHERE is_admin = 1`),
   deleteUser: db.prepare(`DELETE FROM users WHERE id = ?`),
   insertSession: db.prepare(`
@@ -143,6 +149,14 @@ export async function setUserPin(id: string, pin: string) {
 
 export function countAdmins(): number {
   return (stmts.countAdmins.get() as { n: number }).n;
+}
+
+export function setUserAdmin(id: string, isAdmin: boolean): void {
+  stmts.updateAdmin.run(isAdmin ? 1 : 0, Date.now(), id);
+}
+
+export function setUserAvatar(id: string, avatar: string | null): void {
+  stmts.updateAvatar.run(avatar, Date.now(), id);
 }
 
 export function deleteUser(id: string) {

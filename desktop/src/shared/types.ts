@@ -80,6 +80,26 @@ export interface HueRoom {
   anyReachable: boolean;
 }
 
+// ---- Admin: users + permissions ----------------------------------------
+
+export type Feature = "chat" | "lighting" | "group_chat";
+
+export interface AdminUserView extends User {
+  permissions: { feature: Feature; resource_id: string | null }[];
+}
+
+export interface CreateUserBody {
+  username: string;
+  pin: string;
+  is_admin?: boolean;
+  avatar?: string | null;
+  permissions?: {
+    chat?: boolean;
+    group_chat?: boolean;
+    lighting?: string[];
+  };
+}
+
 // ---- IPC: what the preload exposes on window.api ------------------------
 
 export interface ApiBridge {

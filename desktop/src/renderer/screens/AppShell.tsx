@@ -11,6 +11,7 @@ import { Button } from "../components/Button";
 import { useAuth } from "../lib/auth";
 import { hasPermission } from "../lib/perms";
 import { useView, type ViewName } from "../lib/view";
+import { Admin } from "./Admin";
 import { Chat } from "./Chat";
 import { Lighting } from "./Lighting";
 import { Placeholder } from "./Placeholder";
@@ -191,7 +192,7 @@ function Pane({ view }: { view: ViewName }) {
     case "group":
       return <Placeholder title="Group Chat" message="Household chat lands in Phase 6." />;
     case "admin":
-      return <Placeholder title="Admin" message="User & permission management lands in Phase 7." />;
+      return <Admin />;
     case "settings":
       return <Settings />;
   }

@@ -7,9 +7,12 @@
  * context). Errors are normalised into ApiError so the UI can branch cleanly.
  */
 import type {
+  AdminUserView,
   ChatMessage,
   ChatStreamEvent,
   ConversationSummary,
+  CreateUserBody,
+  Feature,
   GatewayConfig,
   HueRoom,
   Permission,
@@ -28,7 +31,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOpts {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
   token?: string | null;
   /** Override the cached base URL (used during initial config probe). */
@@ -158,6 +161,34 @@ export const api = {
       method: "POST",
       body: { brightness },
     }),
+
+  // ---- admin: users ----
+  listAdminUsers: () =>
+    request<{ users: AdminUserView[] }>("/api/admin/users"),
+  createAdminUser: (body: CreateUserBody) =>
+    request<{ user: AdminUserView }>("/api/admin/users", {
+      method: "POST",
+      body,
+    }),
+  patchAdminUser: (
+    id: string,
+    body: { pin?: string; avatar?: string | null; is_admin?: boolean },
+  ) =>
+    request<{ user: AdminUserView }>(`/api/admin/users/${id}`, {
+      method: "PATCH",
+      body,
+    }),
+  setUserFeaturePermission: (
+    id: string,
+    feature: Feature,
+    body: { granted?: boolean; rooms?: string[] },
+  ) =>
+    request<{ user: AdminUserView }>(
+      `/api/admin/users/${id}/permissions/${feature}`,
+      { method: "PUT", body },
+    ),
+  deleteAdminUser: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
 };
 
 /**
