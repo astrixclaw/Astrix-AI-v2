@@ -245,7 +245,7 @@ function RoomCard({ room, onUpdate, onError }: CardProps) {
         }}
       >
         <RoomIcon archetype={room.archetype} on={isOn} />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, marginRight: "0.4rem" }}>
           <div
             style={{
               fontWeight: 600,
@@ -284,30 +284,53 @@ function RoomCard({ room, onUpdate, onError }: CardProps) {
   );
 }
 
+/**
+ * Toggle pill.
+ *
+ * Layout math:
+ *   track:   width 46, height 26, 1px border, padding 2px on every side
+ *   knob:    20×20, sits inside the padded inner area
+ *   inner area: 46 - 2 (border) - 4 (padding) = 40 wide
+ *   knob travel: 40 - 20 = 20
+ *   off:     left = 0 inside inner area
+ *   on:      left = 20 inside inner area
+ *
+ * box-sizing is content-box for the inner area so `top: 2` + `height 20` +
+ * `2` add up to the track's full inner height without depending on the box
+ * model of the parent button.
+ */
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  const TRACK_W = 46;
+  const TRACK_H = 26;
+  const KNOB = 20;
+  const PAD = 2;
+  const travel = TRACK_W - KNOB - PAD * 2 - 2; // -2 for the 1px borders on either side
   return (
     <motion.button
       onClick={onClick}
       whileTap={{ scale: 0.94 }}
       aria-pressed={on}
       style={{
-        width: 44,
-        height: 24,
-        borderRadius: 999,
+        width: TRACK_W,
+        height: TRACK_H,
+        borderRadius: TRACK_H / 2,
         background: on ? "var(--accent)" : "var(--bg-3)",
         border: "1px solid var(--border)",
         position: "relative",
+        padding: 0,
+        flexShrink: 0,
         transition: "background 200ms var(--ease-out)",
       }}
     >
       <motion.span
-        animate={{ x: on ? 20 : 2 }}
+        animate={{ x: on ? travel : 0 }}
         transition={{ type: "spring", stiffness: 380, damping: 28 }}
         style={{
           position: "absolute",
-          top: 2,
-          width: 18,
-          height: 18,
+          top: PAD,
+          left: PAD,
+          width: KNOB,
+          height: KNOB,
           borderRadius: "50%",
           background: "white",
           boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
