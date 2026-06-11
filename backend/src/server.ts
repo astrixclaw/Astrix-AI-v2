@@ -15,6 +15,7 @@ import { avatarRoutes } from "./routes/avatars.js";
 import { chatRoutes } from "./routes/chat.js";
 import { groupChatRoutes } from "./routes/group_chat.js";
 import { lightingRoutes } from "./routes/lighting.js";
+import { cameraRoutes } from "./routes/cameras.js";
 import { purgeOrphanAttachments } from "./services/attachments.js";
 import { purgeGroupOrphanAttachments } from "./services/group_attachments.js";
 import { purgeExpiredSessions } from "./services/auth.js";
@@ -72,6 +73,7 @@ await app.register(lightingRoutes);
 await app.register(groupChatRoutes);
 await app.register(avatarRoutes);
 await app.register(adminRoutes);
+await app.register(cameraRoutes);
 
 app.get("/api/health", async () => ({ ok: true, ts: Date.now() }));
 

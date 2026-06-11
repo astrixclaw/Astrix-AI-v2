@@ -66,7 +66,7 @@ function viewWithPerms(u: User): AdminUserView {
 }
 
 function isKnownFeature(f: unknown): f is FeatureId {
-  return f === FEATURES.CHAT || f === FEATURES.LIGHTING || f === FEATURES.GROUP_CHAT;
+  return f === FEATURES.CHAT || f === FEATURES.LIGHTING || f === FEATURES.GROUP_CHAT || f === FEATURES.CAMERAS;
 }
 
 /** 4-32 chars, lowercase letters/digits/underscore only — no spaces, no caps. */
@@ -241,6 +241,9 @@ export async function adminRoutes(app: FastifyInstance) {
       if (feature === FEATURES.LIGHTING) {
         const rooms = Array.isArray(b.rooms) ? b.rooms.filter((r) => typeof r === "string") : [];
         setUserFeaturePermissions(target.id, FEATURES.LIGHTING, rooms);
+      } else if (feature === FEATURES.CAMERAS) {
+        // cameras — boolean toggle (future: could be scoped to camera ids)
+        setUserFeaturePermissions(target.id, FEATURES.CAMERAS, b.granted ? [null] : []);
       } else {
         // chat / group_chat — boolean toggle, encoded as wildcard grant
         setUserFeaturePermissions(

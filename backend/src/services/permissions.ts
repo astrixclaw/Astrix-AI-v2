@@ -19,6 +19,7 @@ export const FEATURES = {
   CHAT: "chat",
   LIGHTING: "lighting",
   GROUP_CHAT: "group_chat",
+  CAMERAS: "cameras",
 } as const;
 
 export type FeatureId = (typeof FEATURES)[keyof typeof FEATURES];

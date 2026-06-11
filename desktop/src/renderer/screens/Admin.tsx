@@ -238,6 +238,8 @@ function UserRow({
     if (user.permissions.some((p) => p.feature === "chat")) out.push("chat");
     if (user.permissions.some((p) => p.feature === "group_chat"))
       out.push("group_chat");
+    if (user.permissions.some((p) => p.feature === "cameras"))
+      out.push("cameras");
     const lighting = user.permissions.filter((p) => p.feature === "lighting");
     if (lighting.length === 0) {
       /* nothing */
@@ -306,6 +308,7 @@ function UserDrawer({
 
   const hasChat = user.permissions.some((p) => p.feature === "chat");
   const hasGroup = user.permissions.some((p) => p.feature === "group_chat");
+  const hasCameras = user.permissions.some((p) => p.feature === "cameras");
   const lightingGrants = useMemo(
     () => user.permissions.filter((p) => p.feature === "lighting"),
     [user.permissions],
@@ -343,9 +346,9 @@ function UserDrawer({
     await onChanged();
   }
 
-  async function toggleFeature(feature: "chat" | "group_chat") {
+  async function toggleFeature(feature: "chat" | "group_chat" | "cameras") {
     const granted =
-      feature === "chat" ? !hasChat : feature === "group_chat" ? !hasGroup : false;
+      feature === "chat" ? !hasChat : feature === "group_chat" ? !hasGroup : feature === "cameras" ? !hasCameras : false;
     await withBusy(() =>
       api.setUserFeaturePermission(user.id, feature, { granted }),
     );
@@ -480,6 +483,10 @@ function UserDrawer({
             <Row>
               <RowLabel>Group chat</RowLabel>
               <Toggle on={hasGroup} onClick={() => void toggleFeature("group_chat")} />
+            </Row>
+            <Row>
+              <RowLabel>Security cameras</RowLabel>
+              <Toggle on={hasCameras} onClick={() => void toggleFeature("cameras")} />
             </Row>
             <div style={{ marginTop: "0.85rem" }}>
               <div

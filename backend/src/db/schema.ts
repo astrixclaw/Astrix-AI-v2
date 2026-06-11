@@ -81,6 +81,30 @@ CREATE TABLE IF NOT EXISTS group_attachments (
 CREATE INDEX IF NOT EXISTS idx_group_attachments_user ON group_attachments(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_attachments_msg ON group_attachments(message_id);
 
+CREATE TABLE IF NOT EXISTS cameras (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  brand        TEXT NOT NULL DEFAULT 'generic_rtsp',
+  rtsp_url     TEXT NOT NULL,
+  sub_rtsp_url TEXT,
+  channel      INTEGER NOT NULL DEFAULT 1,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS camera_recordings (
+  id          TEXT PRIMARY KEY,
+  camera_id   TEXT NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+  filename    TEXT NOT NULL,
+  duration_s  REAL,
+  size_bytes  INTEGER,
+  started_at  INTEGER NOT NULL,
+  ended_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_recordings_camera ON camera_recordings(camera_id);
+
 CREATE TABLE IF NOT EXISTS attachments (
   id            TEXT PRIMARY KEY,
   user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
