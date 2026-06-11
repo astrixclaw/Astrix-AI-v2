@@ -76,6 +76,7 @@ export interface GatewayConfig {
   url: string;
   token: string;
   agent: string;
+  memberAgent: string;
 }
 
 // ---- Hue pairing -------------------------------------------------------

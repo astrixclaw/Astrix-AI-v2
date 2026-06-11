@@ -381,6 +381,7 @@ export async function chatRoutes(app: FastifyInstance) {
       try {
         for await (const chunk of streamChatTurn({
           username: user.username,
+          isAdmin: !!user.is_admin,
           history: priorHistory,
           newUserMessage,
           signal: abort.signal,

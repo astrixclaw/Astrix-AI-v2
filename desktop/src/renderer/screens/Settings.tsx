@@ -258,6 +258,7 @@ function GatewaySection() {
   const [loaded, setLoaded] = useState(false);
   const [url, setUrl] = useState("");
   const [agent, setAgent] = useState("main");
+  const [memberAgent, setMemberAgent] = useState("lite");
   const [tokenMasked, setTokenMasked] = useState("");
   const [tokenInput, setTokenInput] = useState("");
   const [showToken, setShowToken] = useState(false);
@@ -270,6 +271,7 @@ function GatewaySection() {
         const cfg = await api.getGatewayConfig();
         setUrl(cfg.url);
         setAgent(cfg.agent || "main");
+        setMemberAgent(cfg.memberAgent || "lite");
         setTokenMasked(cfg.token);
       } catch (e) {
         setErr(e instanceof ApiError ? e.code : "load_failed");
@@ -283,15 +285,17 @@ function GatewaySection() {
     setErr(null);
     setState("saving");
     try {
-      const patch: { url: string; agent: string; token?: string } = {
+      const patch: { url: string; agent: string; memberAgent: string; token?: string } = {
         url: url.trim(),
         agent: agent.trim() || "main",
+        memberAgent: memberAgent.trim() || "lite",
       };
       // Only send token when the admin typed a new one.
       if (tokenInput.trim()) patch.token = tokenInput.trim();
       const updated = await api.setGatewayConfig(patch);
       setUrl(updated.url);
       setAgent(updated.agent);
+      setMemberAgent(updated.memberAgent || "lite");
       setTokenMasked(updated.token);
       setTokenInput("");
       setState("saved");
@@ -321,7 +325,7 @@ function GatewaySection() {
           />
 
           <div style={{ height: "0.85rem" }} />
-          <FieldLabel>Agent</FieldLabel>
+          <FieldLabel>Admin agent</FieldLabel>
           <input
             type="text"
             value={agent}
@@ -336,7 +340,26 @@ function GatewaySection() {
               color: "var(--text-faint)",
             }}
           >
-            Sent as <code>model: openclaw/&lt;agent&gt;</code>.
+            Agent used for admin accounts. Sent as <code>model: openclaw/&lt;agent&gt;</code>.
+          </p>
+
+          <div style={{ height: "0.85rem" }} />
+          <FieldLabel>Member agent</FieldLabel>
+          <input
+            type="text"
+            value={memberAgent}
+            onChange={(e) => setMemberAgent(e.target.value)}
+            placeholder="lite"
+            spellCheck={false}
+          />
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              fontSize: 11,
+              color: "var(--text-faint)",
+            }}
+          >
+            Agent used for non-admin household members. Defaults to <code>lite</code> (gpt-4o-mini).
           </p>
 
           <div style={{ height: "0.85rem" }} />

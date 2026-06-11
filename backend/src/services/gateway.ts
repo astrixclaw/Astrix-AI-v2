@@ -66,6 +66,7 @@ function modelFor(agent: string): string {
  */
 export async function* streamChatTurn(opts: {
   username: string;
+  isAdmin?: boolean;
   history: GatewayMessage[];
   newUserMessage: string | GatewayContentPart[];
   signal?: AbortSignal;
@@ -100,7 +101,7 @@ export async function* streamChatTurn(opts: {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: modelFor(cfg.agent || "main"),
+          model: modelFor(opts.isAdmin ? (cfg.agent || "main") : (cfg.memberAgent || "lite")),
           messages,
           stream: true,
         }),

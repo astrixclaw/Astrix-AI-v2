@@ -90,7 +90,7 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   app.patch<{
-    Body: { url?: string; token?: string; agent?: string };
+    Body: { url?: string; token?: string; agent?: string; memberAgent?: string };
   }>(
     "/api/admin/gateway",
     { preHandler: requireAdmin },

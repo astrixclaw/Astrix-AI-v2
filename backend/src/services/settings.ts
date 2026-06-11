@@ -24,6 +24,7 @@ export const SETTING_KEYS = {
   GATEWAY_URL: "gateway.url",
   GATEWAY_TOKEN: "gateway.token",
   GATEWAY_AGENT: "gateway.agent",
+  GATEWAY_MEMBER_AGENT: "gateway.member_agent",
   HUE_BRIDGE_IP: "hue_bridge.ip",
   HUE_BRIDGE_KEY: "hue_bridge.application_key",
 } as const;
@@ -41,6 +42,7 @@ export interface GatewayConfig {
   url: string;
   token: string;
   agent: string;
+  memberAgent: string;
 }
 
 export function getGatewayConfig(): GatewayConfig {
@@ -48,6 +50,7 @@ export function getGatewayConfig(): GatewayConfig {
     url: getSetting(SETTING_KEYS.GATEWAY_URL),
     token: getSetting(SETTING_KEYS.GATEWAY_TOKEN),
     agent: getSetting(SETTING_KEYS.GATEWAY_AGENT) || "default",
+    memberAgent: getSetting(SETTING_KEYS.GATEWAY_MEMBER_AGENT) || "lite",
   };
 }
 
@@ -55,6 +58,7 @@ export function setGatewayConfig(patch: Partial<GatewayConfig>): GatewayConfig {
   if (patch.url !== undefined) setSetting(SETTING_KEYS.GATEWAY_URL, patch.url.trim());
   if (patch.token !== undefined) setSetting(SETTING_KEYS.GATEWAY_TOKEN, patch.token.trim());
   if (patch.agent !== undefined) setSetting(SETTING_KEYS.GATEWAY_AGENT, patch.agent.trim());
+  if (patch.memberAgent !== undefined) setSetting(SETTING_KEYS.GATEWAY_MEMBER_AGENT, patch.memberAgent.trim());
   return getGatewayConfig();
 }
 
