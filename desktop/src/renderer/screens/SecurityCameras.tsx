@@ -307,7 +307,8 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
   const { url: snapUrl, loading: snapLoading, take: takeSnap } = useSnapshot(camera);
 
   // MJPEG URL for smooth live view (15fps, no <video> element needed)
-  const [mjpegError, setMjpegError] = React.useState(false);
+  // Use a key to force re-mount if the stream drops
+  const [mjpegKey, setMjpegKey] = React.useState(0);
   const mjpegUrl = api.mjpegUrl(camera.id);
   const [quality, setQuality] = useState<"main" | "sub">("main");
   const [recording, setRecording] = useState(false);
@@ -398,14 +399,13 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
         {/* Hidden video element kept for HLS (unused for display) */}
         <video ref={videoRef} style={{ display: "none" }} autoPlay playsInline muted />
         {/* MJPEG live view — smooth ~15fps, plain <img> tag, no GPU issues */}
-        {!mjpegError && (
-          <img
-            src={mjpegUrl}
-            alt="Live view"
-            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-            onError={() => setMjpegError(true)}
-          />
-        )}
+        <img
+          key={mjpegKey}
+          src={mjpegUrl}
+          alt="Live view"
+          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          onError={() => setTimeout(() => setMjpegKey(k => k + 1), 2000)}
+        />
         {error && (
           <div
             style={{
