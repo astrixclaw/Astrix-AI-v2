@@ -225,6 +225,11 @@ function registerIpc() {
 
 // ---- App lifecycle ------------------------------------------------------
 
+// Force software video decoding to avoid Electron GPU compositing black-screen
+// bug when rendering H.264 HLS streams via hls.js on some Windows setups.
+app.commandLine.appendSwitch("force-color-profile", "srgb");
+app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling,MediaSessionService");
+
 void app.whenReady().then(() => {
   installCspOverride();
   registerIpc();
