@@ -242,6 +242,10 @@ export const api = {
       : `${_baseUrl}/api/cameras/${id}/snapshot`,
   mjpegUrl: (id: string) =>
     `${_baseUrl}/api/cameras/${id}/mjpeg`,
+  frameUrl: (id: string) =>
+    `${_baseUrl}/api/cameras/${id}/frame`,
+  stopFrameBuffer: (id: string) =>
+    request<{ ok: true }>(`/api/cameras/${id}/frame/stop`, { method: "POST" }),
   hlsSegmentUrl: (path: string) =>
     _token ? `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(_token)}` : path,
   startRecording: (id: string) =>

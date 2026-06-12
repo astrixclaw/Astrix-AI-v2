@@ -364,3 +364,39 @@ function waitForFile(path: string, timeoutMs: number): Promise<void> {
     check();
   });
 }
+
+// ---- Frame buffer (for polling live view) --------------------------------
+
+const frameBuffers = new Map<string, { path: string; proc: import("node:child_process").ChildProcess }>();
+
+export async function getFramePath(cameraId: string, rtspUrl: string): Promise<string> {
+  const existing = frameBuffers.get(cameraId);
+  if (existing) return existing.path;
+
+  const ffmpeg = findFfmpeg();
+  const dir = join(tmpdir(), "astrix-frames");
+  await mkdir(dir, { recursive: true });
+  const framePath = join(dir, `${cameraId}.jpg`);
+
+  const proc = spawn(ffmpeg, [
+    "-loglevel", "error",
+    "-rtsp_transport", "tcp",
+    "-i", rtspUrl,
+    "-vf", "fps=10,scale=1280:-1",
+    "-q:v", "4",
+    "-update", "1",   // overwrite same file each frame
+    "-y", framePath,
+  ], { stdio: ["ignore", "ignore", "ignore"] });
+
+  proc.on("exit", () => { frameBuffers.delete(cameraId); });
+  frameBuffers.set(cameraId, { path: framePath, proc });
+
+  // Give ffmpeg a moment to write the first frame
+  await new Promise<void>(r => setTimeout(r, 800));
+  return framePath;
+}
+
+export function stopFrameBuffer(cameraId: string): void {
+  const entry = frameBuffers.get(cameraId);
+  if (entry) { try { entry.proc.kill(); } catch { /**/ } frameBuffers.delete(cameraId); }
+}

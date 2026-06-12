@@ -308,14 +308,29 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
   const { videoRef, state, error, pause, play } = useCameraStream(camera, false);
   const { url: snapUrl, loading: snapLoading, take: takeSnap } = useSnapshot(camera);
 
-  // MJPEG URL for smooth live view (15fps, no <video> element needed)
-  // Use a key to force re-mount if the stream drops
-  const [mjpegKey, setMjpegKey] = React.useState(0);
-  const mjpegUrl = api.mjpegUrl(camera.id);
+  // High-frequency frame polling for live view (~5fps)
+  // Backend runs ffmpeg continuously, overwriting a single JPEG file.
+  // We poll that file at 200ms — no GPU/MJPEG issues, just a plain <img>.
+  const [liveFrame, setLiveFrame] = React.useState<string>("");
 
-  // Kill any existing HLS stream so the DVR's single RTSP slot is free for MJPEG
   React.useEffect(() => {
+    // Stop any existing HLS/MJPEG streams so DVR's single RTSP slot is free
     api.stopStream(camera.id).catch(() => {});
+    api.stopFrameBuffer(camera.id).catch(() => {});
+
+    let active = true;
+    const poll = () => {
+      if (!active) return;
+      setLiveFrame(`${api.frameUrl(camera.id)}&_t=${Date.now()}`);
+      setTimeout(poll, 200);
+    };
+    // Small delay to let backend start the frame buffer
+    setTimeout(poll, 500);
+
+    return () => {
+      active = false;
+      api.stopFrameBuffer(camera.id).catch(() => {});
+    };
   }, [camera.id]);
   const [quality, setQuality] = useState<"main" | "sub">("main");
   const [recording, setRecording] = useState(false);
@@ -405,14 +420,14 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
       <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000" }}>
         {/* Hidden video element kept for HLS (unused for display) */}
         <video ref={videoRef} style={{ display: "none" }} autoPlay playsInline muted />
-        {/* MJPEG live view — smooth ~15fps, plain <img> tag, no GPU issues */}
-        <img
-          key={mjpegKey}
-          src={mjpegUrl}
-          alt="Live view"
-          style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-          onError={() => setTimeout(() => setMjpegKey(k => k + 1), 2000)}
-        />
+        {/* Live view: polling single JPEG at 5fps — works in all Electron setups */}
+        {liveFrame && (
+          <img
+            src={liveFrame}
+            alt="Live view"
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+          />
+        )}
         {error && (
           <div
             style={{

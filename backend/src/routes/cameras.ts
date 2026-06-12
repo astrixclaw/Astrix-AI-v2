@@ -45,6 +45,8 @@ import {
   discoverOnvifDevices,
   getHlsDir,
   findFfmpeg,
+  getFramePath,
+  stopFrameBuffer,
   FfmpegNotFoundError,
   ffmpegAvailable,
 } from "../services/streaming.js";
@@ -208,6 +210,38 @@ export async function cameraRoutes(app: FastifyInstance) {
       reply.header("Content-Type", ext);
       reply.header("Cache-Control", "no-cache");
       return reply.send(createReadStream(filePath));
+    },
+  );
+
+  // ── Frame polling (single JPEG, no auth, for high-fps polling live view) ──
+  // ffmpeg runs once and continuously overwrites /tmp/astrix-frames/{id}.jpg
+  // Frontend polls this at 200ms for ~5fps live view without streaming issues.
+  app.get<{ Params: { id: string } }>(
+    "/api/cameras/:id/frame",
+    {},
+    async (req, reply) => {
+      const cam = getCamera(req.params.id);
+      if (!cam) { reply.code(404); return; }
+      try {
+        const framePath = await getFramePath(cam.id, cam.rtsp_url);
+        if (!existsSync(framePath)) { reply.code(503); return { error: "no_frame_yet" }; }
+        reply.header("Content-Type", "image/jpeg");
+        reply.header("Cache-Control", "no-cache, no-store");
+        return reply.send(createReadStream(framePath));
+      } catch (e) {
+        reply.code(503);
+        return { error: String(e) };
+      }
+    },
+  );
+
+  // Cleanup frame buffer when stopping a stream
+  app.post<{ Params: { id: string } }>(
+    "/api/cameras/:id/frame/stop",
+    {},
+    async (req) => {
+      stopFrameBuffer(req.params.id);
+      return { ok: true };
     },
   );
 
