@@ -44,6 +44,7 @@ import {
   isStreamActive,
   discoverOnvifDevices,
   getHlsDir,
+  findFfmpeg,
   FfmpegNotFoundError,
   ffmpegAvailable,
 } from "../services/streaming.js";
@@ -207,6 +208,82 @@ export async function cameraRoutes(app: FastifyInstance) {
       reply.header("Content-Type", ext);
       reply.header("Cache-Control", "no-cache");
       return reply.send(createReadStream(filePath));
+    },
+  );
+
+  // ── MJPEG live stream (no auth — same rationale as HLS segments) ─────────
+  // Returns a continuous multipart/x-mixed-replace JPEG stream at 15fps.
+  // Works with a plain <img> tag — bypasses all GPU compositing issues.
+  app.get<{ Params: { id: string } }>(
+    "/api/cameras/:id/mjpeg",
+    {},
+    async (req, reply) => {
+      const cam = getCamera(req.params.id);
+      if (!cam) { reply.code(404); return; }
+
+      let ffmpeg: string;
+      try { ffmpeg = findFfmpeg(); } catch {
+        reply.code(503);
+        return { error: "ffmpeg_not_found" };
+      }
+
+      const { spawn } = await import("node:child_process");
+      const boundary = "astrix-mjpeg-boundary";
+
+      reply.raw.setHeader("Content-Type", `multipart/x-mixed-replace;boundary=${boundary}`);
+      reply.raw.setHeader("Cache-Control", "no-cache");
+      reply.raw.setHeader("Connection", "keep-alive");
+      reply.raw.statusCode = 200;
+
+      const proc = spawn(ffmpeg, [
+        "-loglevel", "error",
+        "-rtsp_transport", "tcp",
+        "-i", cam.rtsp_url,
+        "-f", "image2pipe",
+        "-vf", "fps=15,scale=1280:-1",   // 15fps, scale down for bandwidth
+        "-q:v", "4",                       // quality: lower = better (1-31)
+        "-vcodec", "mjpeg",
+        "pipe:1",
+      ], { stdio: ["ignore", "pipe", "ignore"] });
+
+      const writeFrame = (data: Buffer) => {
+        try {
+          reply.raw.write(
+            `\r\n--${boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: ${data.length}\r\n\r\n`
+          );
+          reply.raw.write(data);
+        } catch { /* client disconnected */ }
+      };
+
+      let buf = Buffer.alloc(0);
+      const SOI = Buffer.from([0xff, 0xd8]);
+      const EOI = Buffer.from([0xff, 0xd9]);
+
+      proc.stdout.on("data", (chunk: Buffer) => {
+        buf = Buffer.concat([buf, chunk]);
+        // scan for complete JPEG frames
+        let start = 0;
+        while (true) {
+          const s = buf.indexOf(SOI, start);
+          if (s < 0) break;
+          const e = buf.indexOf(EOI, s + 2);
+          if (e < 0) break;
+          writeFrame(buf.slice(s, e + 2));
+          start = e + 2;
+        }
+        // keep only the tail
+        if (start > 0) buf = buf.slice(start);
+      });
+
+      proc.on("exit", () => {
+        try { reply.raw.end(); } catch { /* ignore */ }
+      });
+
+      req.raw.on("close", () => proc.kill());
+      reply.raw.on("close", () => proc.kill());
+
+      // Prevent fastify from auto-sending a reply
+      return reply;
     },
   );
 

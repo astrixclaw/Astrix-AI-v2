@@ -240,6 +240,8 @@ export const api = {
     _token
       ? `${_baseUrl}/api/cameras/${id}/snapshot?token=${encodeURIComponent(_token)}`
       : `${_baseUrl}/api/cameras/${id}/snapshot`,
+  mjpegUrl: (id: string) =>
+    `${_baseUrl}/api/cameras/${id}/mjpeg`,
   hlsSegmentUrl: (path: string) =>
     _token ? `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(_token)}` : path,
   startRecording: (id: string) =>

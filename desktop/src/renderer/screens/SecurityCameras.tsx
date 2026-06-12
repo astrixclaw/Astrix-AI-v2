@@ -306,20 +306,9 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
   const { videoRef, state, error, pause, play } = useCameraStream(camera, true);
   const { url: snapUrl, loading: snapLoading, take: takeSnap } = useSnapshot(camera);
 
-  // Auto-refresh snapshot every second as fallback for live view
-  // (HLS video element has GPU rendering issues on some Windows setups)
-  const [liveSnapUrl, setLiveSnapUrl] = React.useState<string | null>(null);
-  const [liveSnapError, setLiveSnapError] = React.useState(false);
-  React.useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    const refresh = () => {
-      const url = api.snapshotUrl(camera.id);
-      setLiveSnapUrl(`${url}&_t=${Date.now()}`);
-    };
-    refresh(); // immediate first load
-    timer = setInterval(refresh, 1000);
-    return () => clearInterval(timer);
-  }, [camera.id]);
+  // MJPEG URL for smooth live view (15fps, no <video> element needed)
+  const [mjpegError, setMjpegError] = React.useState(false);
+  const mjpegUrl = api.mjpegUrl(camera.id);
   const [quality, setQuality] = useState<"main" | "sub">("main");
   const [recording, setRecording] = useState(false);
   const [recMsg, setRecMsg] = useState<string | null>(null);
@@ -406,15 +395,15 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
 
       {/* Video / Live Snapshot */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000" }}>
-        {/* Hidden video element kept for HLS buffering (even if invisible) */}
+        {/* Hidden video element kept for HLS (unused for display) */}
         <video ref={videoRef} style={{ display: "none" }} autoPlay playsInline muted />
-        {/* Live view: auto-refreshing snapshot (1fps) — reliable on all platforms */}
-        {liveSnapUrl && !liveSnapError && (
+        {/* MJPEG live view — smooth ~15fps, plain <img> tag, no GPU issues */}
+        {!mjpegError && (
           <img
-            src={liveSnapUrl}
+            src={mjpegUrl}
             alt="Live view"
             style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-            onError={() => setLiveSnapError(true)}
+            onError={() => setMjpegError(true)}
           />
         )}
         {error && (
