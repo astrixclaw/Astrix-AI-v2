@@ -393,7 +393,15 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
       <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000" }}>
         <video
           ref={videoRef}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            // Force GPU compositing layer — fixes Electron black video rendering bug
+            transform: "translateZ(0)",
+            WebkitTransform: "translateZ(0)",
+            willChange: "transform",
+          }}
           autoPlay
           playsInline
           muted

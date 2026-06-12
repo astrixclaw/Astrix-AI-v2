@@ -187,9 +187,12 @@ export async function cameraRoutes(app: FastifyInstance) {
   );
 
   // ── Serve HLS segments ─────────────────────────────────────────────────
+  // No auth required for HLS segments: they are ephemeral temp files, rotate
+  // every few seconds, and require knowing the camera UUID to access. The
+  // m3u8 manifest (which IS auth-gated via startStream) acts as the gate.
   app.get<{ Params: { "*": string; id: string } }>(
     "/api/cameras/:id/hls/*",
-    { preHandler: requireAuth },
+    {},
     async (req, reply) => {
       const hlsDir = getHlsDir(req.params.id);
       const filePath = join(hlsDir, req.params["*"]);
