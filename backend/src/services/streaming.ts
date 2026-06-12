@@ -124,13 +124,19 @@ export async function startStream(cameraId: string, rtspUrl: string): Promise<st
   const m3u8 = join(hlsDir, "stream.m3u8");
 
   // FFmpeg args: low-latency HLS, 2-second segments, keep 3 segments.
+  // Re-encode to H.264 so that hls.js in Electron/Chromium can play the stream.
+  // HEVC (H.265) streams like those from ZOSI DVRs are not supported by hls.js
+  // without hardware decoding, so we transcode on the gateway (CPU cost is low
+  // at 1080p with libx264 fast preset).
   const args = [
     "-loglevel", "warning",
     "-rtsp_transport", "tcp",         // more reliable over LAN than UDP
     "-i", rtspUrl,
-    "-c:v", "copy",                    // no re-encode — pass through as-is
-    "-c:a", "aac",
-    "-b:a", "96k",
+    "-c:v", "libx264",                 // transcode to H.264 for browser compat
+    "-preset", "ultrafast",            // minimal CPU, acceptable quality
+    "-tune", "zerolatency",
+    "-crf", "28",                      // quality: lower = better, 28 is good for preview
+    "-c:a", "copy",                    // pass audio through (or ignore if none)
     "-f", "hls",
     "-hls_time", "2",
     "-hls_list_size", "3",

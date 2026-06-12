@@ -82,12 +82,11 @@ function useCameraStream(camera: Camera | null, active: boolean) {
         if (Hls.isSupported() && videoRef.current) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const hls = new Hls({
-            xhrSetup: (xhr: XMLHttpRequest, url: string) => {
-              const authed = api.hlsSegmentUrl(url);
-              if (authed !== url) {
-                // Re-open with the token-bearing URL
-                xhr.open("GET", authed, true);
-              }
+            // hls.js 1.x uses fetch by default — use fetchSetup to inject auth token.
+            // xhrSetup is silently ignored in fetch mode.
+            fetchSetup: (context: { url: string }, initParams: RequestInit) => {
+              const authed = api.hlsSegmentUrl(context.url);
+              return new Request(authed, initParams);
             },
           } as Record<string, unknown>);
           hlsRef.current = hls;

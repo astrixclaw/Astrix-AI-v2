@@ -76,11 +76,12 @@ export async function* streamChatTurn(opts: {
     throw new GatewayNotConfiguredError();
   }
 
-  // Per-user identity hint goes in as a system message every turn.
+  // Per-user identity override — this must take precedence over any
+  // workspace context (USER.md) that names a different default user.
   const messages: GatewayMessage[] = [
     {
       role: "system",
-      content: `You are chatting with the household member named "${opts.username}". Address them by name when natural; don't overuse it.`,
+      content: `IMPORTANT: You are currently chatting with a household member named "${opts.username}". This overrides any other user context. Do NOT call them "Si" or any other name — address them as ${opts.username} throughout this conversation.`,
     },
     ...opts.history,
     { role: "user", content: opts.newUserMessage },
