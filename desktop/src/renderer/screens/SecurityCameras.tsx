@@ -303,13 +303,20 @@ interface LiveViewProps {
 }
 
 function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
-  const { videoRef, state, error, pause, play } = useCameraStream(camera, true);
+  // Pass active=false — we use MJPEG for display, not HLS
+  // (HLS would grab the DVR's single RTSP connection, blocking MJPEG)
+  const { videoRef, state, error, pause, play } = useCameraStream(camera, false);
   const { url: snapUrl, loading: snapLoading, take: takeSnap } = useSnapshot(camera);
 
   // MJPEG URL for smooth live view (15fps, no <video> element needed)
   // Use a key to force re-mount if the stream drops
   const [mjpegKey, setMjpegKey] = React.useState(0);
   const mjpegUrl = api.mjpegUrl(camera.id);
+
+  // Kill any existing HLS stream so the DVR's single RTSP slot is free for MJPEG
+  React.useEffect(() => {
+    api.stopStream(camera.id).catch(() => {});
+  }, [camera.id]);
   const [quality, setQuality] = useState<"main" | "sub">("main");
   const [recording, setRecording] = useState(false);
   const [recMsg, setRecMsg] = useState<string | null>(null);
