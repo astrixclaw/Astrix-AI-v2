@@ -305,6 +305,21 @@ interface LiveViewProps {
 function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
   const { videoRef, state, error, pause, play } = useCameraStream(camera, true);
   const { url: snapUrl, loading: snapLoading, take: takeSnap } = useSnapshot(camera);
+
+  // Auto-refresh snapshot every second as fallback for live view
+  // (HLS video element has GPU rendering issues on some Windows setups)
+  const [liveSnapUrl, setLiveSnapUrl] = React.useState<string | null>(null);
+  const [liveSnapError, setLiveSnapError] = React.useState(false);
+  React.useEffect(() => {
+    let timer: ReturnType<typeof setInterval>;
+    const refresh = () => {
+      const url = api.snapshotUrl(camera.id);
+      setLiveSnapUrl(`${url}&_t=${Date.now()}`);
+    };
+    refresh(); // immediate first load
+    timer = setInterval(refresh, 1000);
+    return () => clearInterval(timer);
+  }, [camera.id]);
   const [quality, setQuality] = useState<"main" | "sub">("main");
   const [recording, setRecording] = useState(false);
   const [recMsg, setRecMsg] = useState<string | null>(null);
@@ -389,23 +404,19 @@ function LiveView({ camera, isAdmin, onClose }: LiveViewProps) {
         </div>
       </div>
 
-      {/* Video */}
+      {/* Video / Live Snapshot */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", background: "#000" }}>
-        <video
-          ref={videoRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            // Force GPU compositing layer — fixes Electron black video rendering bug
-            transform: "translateZ(0)",
-            WebkitTransform: "translateZ(0)",
-            willChange: "transform",
-          }}
-          autoPlay
-          playsInline
-          muted
-        />
+        {/* Hidden video element kept for HLS buffering (even if invisible) */}
+        <video ref={videoRef} style={{ display: "none" }} autoPlay playsInline muted />
+        {/* Live view: auto-refreshing snapshot (1fps) — reliable on all platforms */}
+        {liveSnapUrl && !liveSnapError && (
+          <img
+            src={liveSnapUrl}
+            alt="Live view"
+            style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+            onError={() => setLiveSnapError(true)}
+          />
+        )}
         {error && (
           <div
             style={{
