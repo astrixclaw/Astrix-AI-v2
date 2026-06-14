@@ -2,8 +2,8 @@
  * Security Cameras screen.
  *
  * ZOSI BNC cameras connect via DVR only — no local RTSP or HTTP snapshot
- * endpoint is available. Live view requires the ZOSI Smart app (iOS/Android)
- * or ZOSI CMS (Windows/Mac).
+ * endpoint is available. Live view requires the ZOSI AVSS (iOS/Android)
+ * or ZOSI AVSS (Windows/Mac PC client from zositech.com/pages/app).
  *
  * This screen shows the configured camera list and links out to ZOSI Smart.
  */
@@ -14,9 +14,9 @@ import type { Camera } from "@shared/types";
 
 // ---- Constants ---------------------------------------------------------
 
-const ZOSI_APP_URL = "https://zosi.app/download/";
+const ZOSI_APP_URL = "https://www.zositech.com/pages/app";
 
-// Try to open the ZOSI desktop CMS via protocol handler, fall back to download page.
+// Try to open the ZOSI AVSS desktop client via protocol handler, fall back to download page.
 function openZosiApp() {
   // Attempt deep link first (ZOSI CMS registers "zosiapp://" on some installs)
   window.api.openExternal("zosiapp://").catch(() => {
@@ -88,7 +88,7 @@ function CameraCard({ camera, isAdmin, onEdit, onDelete }: CameraCardProps) {
       >
         <span style={{ fontSize: 32, opacity: 0.4 }}>📷</span>
         <span style={{ fontSize: 11, color: "var(--text-dim)", opacity: 0.6 }}>
-          View in ZOSI Smart
+          View in ZOSI AVSS
         </span>
       </div>
 
@@ -106,7 +106,7 @@ function CameraCard({ camera, isAdmin, onEdit, onDelete }: CameraCardProps) {
           }}
         >
           <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>
-            ↗ Open ZOSI Smart
+            ↗ Open ZOSI AVSS
           </span>
         </div>
       )}
@@ -412,13 +412,13 @@ export function SecurityCameras() {
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Security Cameras</h2>
           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-            {cameras.length} camera{cameras.length !== 1 ? "s" : ""} · live view via ZOSI Smart
+            {cameras.length} camera{cameras.length !== 1 ? "s" : ""} · live view via ZOSI AVSS
           </div>
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <button className="btn-primary" onClick={openZosiApp}>
-            ↗ Open ZOSI Smart
+            ↗ Open ZOSI AVSS
           </button>
           {isAdmin && (
             <button className="btn-ghost" onClick={() => setEditCamera("new")}>
@@ -456,7 +456,7 @@ export function SecurityCameras() {
               textDecoration: "underline",
             }}
           >
-            ZOSI Smart app
+            ZOSI AVSS
           </button>
           . Tap any camera tile to open it.
         </span>
@@ -484,12 +484,12 @@ export function SecurityCameras() {
             </div>
             <div style={{ fontSize: 13 }}>
               {isAdmin
-                ? 'Click "+ Add Camera" to register a camera, or open ZOSI Smart to view live feeds.'
-                : "Ask your admin to configure cameras, then use ZOSI Smart to view live feeds."}
+                ? 'Click "+ Add Camera" to register a camera, or open ZOSI AVSS to view live feeds.'
+                : "Ask your admin to configure cameras, then use ZOSI AVSS to view live feeds."}
             </div>
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
               <button className="btn-primary" onClick={openZosiApp}>
-                ↗ Open ZOSI Smart
+                ↗ Open ZOSI AVSS
               </button>
               {isAdmin && (
                 <button className="btn-ghost" onClick={() => setEditCamera("new")}>
