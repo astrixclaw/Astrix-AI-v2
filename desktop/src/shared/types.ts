@@ -19,7 +19,7 @@ export interface User {
 export interface Permission {
   id: string;
   user_id: string;
-  feature: "chat" | "lighting" | "group_chat" | "cameras";
+  feature: "chat" | "lighting" | "group_chat";
   resource_id: string | null;
   created_at: number;
 }
@@ -72,40 +72,6 @@ export type ChatStreamEvent =
 
 // ---- Admin gateway config ----------------------------------------------
 
-// ---- Cameras ----------------------------------------------------------
-
-export interface Camera {
-  id: string;
-  name: string;
-  brand: string;
-  rtsp_url: string;
-  sub_rtsp_url: string | null;
-  channel: number;
-  enabled: 0 | 1;
-  sort_order: number;
-  created_at: number;
-  updated_at: number;
-}
-
-export interface CameraRecording {
-  id: string;
-  camera_id: string;
-  filename: string;
-  duration_s: number | null;
-  size_bytes: number | null;
-  started_at: number;
-  ended_at: number | null;
-}
-
-export interface CreateCameraBody {
-  name: string;
-  brand?: string;
-  rtsp_url: string;
-  sub_rtsp_url?: string | null;
-  channel?: number;
-  enabled?: boolean;
-  sort_order?: number;
-}
 
 // ---- Gateway -----------------------------------------------------------
 
@@ -172,7 +138,7 @@ export type GroupSocketEvent =
 
 // ---- Admin: users + permissions ----------------------------------------
 
-export type Feature = "chat" | "lighting" | "group_chat" | "cameras";
+export type Feature = "chat" | "lighting" | "group_chat";
 
 export interface AdminUserView extends User {
   permissions: { feature: Feature; resource_id: string | null }[];

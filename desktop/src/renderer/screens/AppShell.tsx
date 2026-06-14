@@ -16,7 +16,6 @@ import { Avatar } from "../components/Avatar";
 import { Chat } from "./Chat";
 import { GroupChat } from "./GroupChat";
 import { Lighting } from "./Lighting";
-import { SecurityCameras } from "./SecurityCameras";
 import { Profile } from "./Profile";
 import { Settings } from "./Settings";
 
@@ -26,7 +25,6 @@ export function AppShell() {
 
   const showChat = hasPermission(user, permissions, "chat");
   const showLighting = hasPermission(user, permissions, "lighting");
-  const showCameras = hasPermission(user, permissions, "cameras");
   const showGroup = hasPermission(user, permissions, "group_chat");
   const showAdmin = !!user?.is_admin;
 
@@ -85,13 +83,6 @@ export function AppShell() {
             label="Lighting"
             active={view === "lighting"}
             onClick={() => setView("lighting")}
-          />
-        )}
-        {showCameras && (
-          <NavItem
-            label="Security Cameras"
-            active={view === "cameras"}
-            onClick={() => setView("cameras")}
           />
         )}
         {showAdmin && (
@@ -202,8 +193,7 @@ function Pane({ view }: { view: ViewName }) {
       return <Chat />;
     case "lighting":
       return <Lighting />;
-    case "cameras":
-      return <SecurityCameras />;
+
     case "group":
       return <GroupChat />;
     case "admin":

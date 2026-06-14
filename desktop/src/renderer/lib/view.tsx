@@ -6,7 +6,7 @@
  */
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
-export type ViewName = "chat" | "lighting" | "cameras" | "group" | "admin" | "settings" | "profile";
+export type ViewName = "chat" | "lighting" | "group" | "admin" | "settings" | "profile";
 
 interface ViewCtx {
   view: ViewName;

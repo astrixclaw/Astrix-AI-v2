@@ -9,12 +9,9 @@
 import type {
   AdminUserView,
   AttachmentSummary,
-  Camera,
-  CameraRecording,
   ChatMessage,
   ChatStreamEvent,
   ConversationSummary,
-  CreateCameraBody,
   CreateUserBody,
   Feature,
   GatewayConfig,
@@ -215,50 +212,6 @@ export const api = {
   deleteAdminUser: (id: string) =>
     request<{ ok: true }>(`/api/admin/users/${id}`, { method: "DELETE" }),
 
-  // ---- cameras ----
-  listCameras: () =>
-    request<{ cameras: Camera[]; ffmpegAvailable: boolean }>("/api/cameras"),
-  createCamera: (body: CreateCameraBody) =>
-    request<{ camera: Camera }>("/api/cameras", { method: "POST", body }),
-  updateCamera: (id: string, body: Partial<CreateCameraBody>) =>
-    request<{ camera: Camera }>(`/api/cameras/${id}`, { method: "PATCH", body }),
-  deleteCamera: (id: string) =>
-    request<{ ok: true }>(`/api/cameras/${id}`, { method: "DELETE" }),
-  startStream: async (id: string, quality?: "main" | "sub") => {
-    const res = await request<{ ok: true; hlsUrl: string; streamId: string }>(
-      `/api/cameras/${id}/stream/start`,
-      { method: "POST", body: { quality: quality ?? "main" } },
-    );
-    // hlsUrl is a path — prefix with base URL so hls.js can fetch the segments
-    return { ...res, hlsUrl: `${_baseUrl}${res.hlsUrl}` };
-  },
-  stopStream: (id: string) =>
-    request<{ ok: true }>(`/api/cameras/${id}/stream/stop`, { method: "POST" }),
-  streamStatus: (id: string) =>
-    request<{ active: boolean; recording: boolean }>(`/api/cameras/${id}/stream/status`),
-  snapshotUrl: (id: string) =>
-    _token
-      ? `${_baseUrl}/api/cameras/${id}/snapshot?token=${encodeURIComponent(_token)}`
-      : `${_baseUrl}/api/cameras/${id}/snapshot`,
-  mjpegUrl: (id: string) =>
-    `${_baseUrl}/api/cameras/${id}/mjpeg`,
-  frameUrl: (id: string) =>
-    `${_baseUrl}/api/cameras/${id}/frame`,
-  stopFrameBuffer: (id: string) =>
-    request<{ ok: true }>(`/api/cameras/${id}/frame/stop`, { method: "POST" }),
-  hlsSegmentUrl: (path: string) =>
-    _token ? `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(_token)}` : path,
-  startRecording: (id: string) =>
-    request<{ ok: true; recordingId: string }>(`/api/cameras/${id}/record/start`, { method: "POST" }),
-  stopRecording: (id: string) =>
-    request<{ ok: true }>(`/api/cameras/${id}/record/stop`, { method: "POST" }),
-  listRecordings: (id: string) =>
-    request<{ recordings: CameraRecording[] }>(`/api/cameras/${id}/recordings`),
-  discoverCameras: (timeoutMs?: number) =>
-    request<{ devices: string[] }>("/api/cameras/discover", {
-      method: "POST",
-      body: { timeoutMs: timeoutMs ?? 4000 },
-    }),
 
   // ---- avatars ----
   uploadOwnAvatar: async (file: File) => uploadAvatar("/api/me/avatar", file),
