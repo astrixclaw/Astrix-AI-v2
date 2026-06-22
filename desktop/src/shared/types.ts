@@ -80,6 +80,8 @@ export interface GatewayConfig {
   token: string;
   agent: string;
   memberAgent: string;
+  /** When set, use this model directly for all chat instead of deriving from agent. */
+  modelOverride: string;
 }
 
 // ---- Hue pairing -------------------------------------------------------

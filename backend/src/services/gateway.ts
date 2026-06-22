@@ -102,7 +102,9 @@ export async function* streamChatTurn(opts: {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: modelFor(opts.isAdmin ? (cfg.agent || "main") : (cfg.memberAgent || "lite")),
+          model: cfg.modelOverride?.trim()
+            ? cfg.modelOverride.trim()
+            : modelFor(opts.isAdmin ? (cfg.agent || "main") : (cfg.memberAgent || "lite")),
           messages,
           stream: true,
         }),

@@ -156,6 +156,8 @@ export const api = {
     request<GatewayConfig>("/api/admin/gateway"),
   setGatewayConfig: (patch: Partial<GatewayConfig>) =>
     request<GatewayConfig>("/api/admin/gateway", { method: "PATCH", body: patch }),
+  getGatewayModels: () =>
+    request<{ data: Array<{ id: string }> }>("/api/admin/gateway/models"),
 
   // ---- hue pairing (admin) ----
   discoverHue: () =>

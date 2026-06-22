@@ -25,6 +25,7 @@ export const SETTING_KEYS = {
   GATEWAY_TOKEN: "gateway.token",
   GATEWAY_AGENT: "gateway.agent",
   GATEWAY_MEMBER_AGENT: "gateway.member_agent",
+  GATEWAY_MODEL_OVERRIDE: "gateway.model_override",
   HUE_BRIDGE_IP: "hue_bridge.ip",
   HUE_BRIDGE_KEY: "hue_bridge.application_key",
 } as const;
@@ -43,6 +44,8 @@ export interface GatewayConfig {
   token: string;
   agent: string;
   memberAgent: string;
+  /** When set, use this model directly instead of deriving from agent. */
+  modelOverride: string;
 }
 
 export function getGatewayConfig(): GatewayConfig {
@@ -51,6 +54,7 @@ export function getGatewayConfig(): GatewayConfig {
     token: getSetting(SETTING_KEYS.GATEWAY_TOKEN),
     agent: getSetting(SETTING_KEYS.GATEWAY_AGENT) || "default",
     memberAgent: getSetting(SETTING_KEYS.GATEWAY_MEMBER_AGENT) || "lite",
+    modelOverride: getSetting(SETTING_KEYS.GATEWAY_MODEL_OVERRIDE),
   };
 }
 
@@ -59,6 +63,7 @@ export function setGatewayConfig(patch: Partial<GatewayConfig>): GatewayConfig {
   if (patch.token !== undefined) setSetting(SETTING_KEYS.GATEWAY_TOKEN, patch.token.trim());
   if (patch.agent !== undefined) setSetting(SETTING_KEYS.GATEWAY_AGENT, patch.agent.trim());
   if (patch.memberAgent !== undefined) setSetting(SETTING_KEYS.GATEWAY_MEMBER_AGENT, patch.memberAgent.trim());
+  if (patch.modelOverride !== undefined) setSetting(SETTING_KEYS.GATEWAY_MODEL_OVERRIDE, patch.modelOverride.trim());
   return getGatewayConfig();
 }
 

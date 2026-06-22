@@ -90,11 +90,36 @@ export async function adminRoutes(app: FastifyInstance) {
   );
 
   app.patch<{
-    Body: { url?: string; token?: string; agent?: string; memberAgent?: string };
+    Body: { url?: string; token?: string; agent?: string; memberAgent?: string; modelOverride?: string };
   }>(
     "/api/admin/gateway",
     { preHandler: requireAdmin },
     async (req) => redactGateway(setGatewayConfig(req.body ?? {})),
+  );
+
+  // Proxy the gateway's /v1/models list so the renderer doesn't need the real token.
+  app.get(
+    "/api/admin/gateway/models",
+    { preHandler: requireAdmin },
+    async (_req, reply) => {
+      const cfg = getGatewayConfig();
+      if (!cfg.url) {
+        return reply.status(503).send({ error: "gateway_not_configured" });
+      }
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`;
+      let res: Response;
+      try {
+        res = await fetch(`${cfg.url.replace(/\/+$/, "")}/v1/models`, { headers });
+      } catch (e) {
+        return reply.status(502).send({ error: "gateway_unreachable" });
+      }
+      if (!res.ok) {
+        return reply.status(502).send({ error: `gateway_http_${res.status}` });
+      }
+      const data = await res.json();
+      return data;
+    },
   );
 
   // ---------- Users ----------

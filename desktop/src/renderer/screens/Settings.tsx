@@ -51,6 +51,8 @@ export function Settings() {
 
         {user?.is_admin && <GatewaySection />}
 
+        {user?.is_admin && <ModelSection />}
+
         {user?.is_admin && <HueSection />}
 
         <AccountSection />
@@ -413,6 +415,93 @@ function GatewaySection() {
               Save gateway
             </Button>
             <StatusPill state={state} msg={err ?? undefined} />
+          </div>
+        </>
+      )}
+    </Section>
+  );
+}
+
+// -------------------------------------------------------------------------
+
+function ModelSection() {
+  const [loaded, setLoaded] = useState(false);
+  const [models, setModels] = useState<string[]>([]);
+  const [current, setCurrent] = useState("");
+  const [state, setState] = useState<SaveState>("idle");
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [cfg, mdls] = await Promise.all([
+          api.getGatewayConfig(),
+          api.getGatewayModels(),
+        ]);
+        setCurrent(cfg.modelOverride ?? "");
+        setModels(mdls.data.map((m) => m.id));
+      } catch (e) {
+        setErr(e instanceof ApiError ? e.code : "load_failed");
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  async function save(value: string) {
+    setErr(null);
+    setState("saving");
+    try {
+      const updated = await api.setGatewayConfig({ modelOverride: value });
+      setCurrent(updated.modelOverride ?? "");
+      setState("saved");
+      setTimeout(() => setState("idle"), 1800);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "save_failed");
+      setState("error");
+    }
+  }
+
+  return (
+    <Section
+      title="Model"
+      description="Override the LLM model used for all household chats. Default uses the agent setting above."
+    >
+      {!loaded ? (
+        <p style={{ color: "var(--text-faint)", fontSize: 13 }}>
+          {err ? `Error: ${err}` : "Loading…"}
+        </p>
+      ) : (
+        <>
+          <FieldLabel>Active model</FieldLabel>
+          <select
+            value={current}
+            onChange={(e) => void save(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.55rem 0.75rem",
+              background: "var(--bg-3)",
+              border: "1px solid var(--border-strong)",
+              borderRadius: "var(--radius-md)",
+              color: "var(--text)",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            <option value="">Default (use agent setting)</option>
+            {models.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+          <div style={{ marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <StatusPill state={state} msg={err ?? undefined} />
+            {current && (
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                ✓ Using <code style={{ color: "var(--text)" }}>{current}</code>
+              </span>
+            )}
           </div>
         </>
       )}
