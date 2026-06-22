@@ -427,7 +427,7 @@ function GatewaySection() {
 function ModelSection() {
   const [loaded, setLoaded] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<{ id: string; name?: string }[]>([]);
   const [current, setCurrent] = useState("");
   const [state, setState] = useState<SaveState>("idle");
   const [err, setErr] = useState<string | null>(null);
@@ -442,7 +442,7 @@ function ModelSection() {
           api.getGatewayModels(),
         ]);
         setCurrent(cfg.modelOverride ?? "");
-        setModels(mdls.data.map((m) => m.id));
+        setModels(mdls.data);
       } catch (e) {
         setLoadErr(e instanceof ApiError ? e.code : "load_failed");
       } finally {
@@ -513,9 +513,9 @@ function ModelSection() {
             }}
           >
             <option value="">Default (use agent setting)</option>
-            {models.map((id) => (
-              <option key={id} value={id}>
-                {id}
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.id}
               </option>
             ))}
           </select>
@@ -523,7 +523,7 @@ function ModelSection() {
             <StatusPill state={state} msg={err ?? undefined} />
             {current && (
               <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-                ✓ Using <code style={{ color: "var(--text)" }}>{current}</code>
+                ✓ Using <code style={{ color: "var(--text)" }}>{models.find(m => m.id === current)?.name || current}</code>
               </span>
             )}
           </div>
