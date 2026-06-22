@@ -15,7 +15,7 @@
  * management). The layout is built to slot them in without rewiring.
  */
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import { Sigil } from "../components/Sigil";
 import { useAuth } from "../lib/auth";
@@ -426,12 +426,15 @@ function GatewaySection() {
 
 function ModelSection() {
   const [loaded, setLoaded] = useState(false);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const [current, setCurrent] = useState("");
   const [state, setState] = useState<SaveState>("idle");
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoaded(false);
+    setLoadErr(null);
     void (async () => {
       try {
         const [cfg, mdls] = await Promise.all([
@@ -441,12 +444,14 @@ function ModelSection() {
         setCurrent(cfg.modelOverride ?? "");
         setModels(mdls.data.map((m) => m.id));
       } catch (e) {
-        setErr(e instanceof ApiError ? e.code : "load_failed");
+        setLoadErr(e instanceof ApiError ? e.code : "load_failed");
       } finally {
         setLoaded(true);
       }
     })();
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   async function save(value: string) {
     setErr(null);
@@ -468,9 +473,28 @@ function ModelSection() {
       description="Override the LLM model used for all household chats. Default uses the agent setting above."
     >
       {!loaded ? (
-        <p style={{ color: "var(--text-faint)", fontSize: 13 }}>
-          {err ? `Error: ${err}` : "Loading…"}
-        </p>
+        <p style={{ color: "var(--text-faint)", fontSize: 13 }}>Loading…</p>
+      ) : loadErr ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          <span style={{ fontSize: 13, color: "var(--danger, #ff6b6b)" }}>
+            Failed to load models ({loadErr})
+          </span>
+          <button
+            type="button"
+            onClick={load}
+            style={{
+              fontSize: 12,
+              padding: "0.25rem 0.6rem",
+              borderRadius: 6,
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: "var(--text-dim)",
+              cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
+        </div>
       ) : (
         <>
           <FieldLabel>Active model</FieldLabel>

@@ -411,6 +411,7 @@ export function Chat() {
           uploading={uploading}
           onFiles={(fs) => void handleFiles(fs)}
           onRemoveStaged={removeStaged}
+          isAdmin={!!user?.is_admin}
         />
       </div>
     </div>
@@ -883,6 +884,7 @@ function Composer({
   uploading,
   onFiles,
   onRemoveStaged,
+  isAdmin,
 }: {
   value: string;
   onChange: (s: string) => void;
@@ -894,9 +896,36 @@ function Composer({
   uploading: boolean;
   onFiles: (files: FileList | File[]) => void;
   onRemoveStaged: (id: string) => void;
+  isAdmin?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Admin-only model switcher state
+  const [models, setModels] = useState<{ id: string; name?: string }[]>([]);
+  const [modelsErr, setModelsErr] = useState(false);
+  const [currentModel, setCurrentModel] = useState("");
+
+  const loadModels = useCallback(() => {
+    if (!isAdmin) return;
+    setModelsErr(false);
+    void Promise.all([
+      api.getGatewayModels(),
+      api.getGatewayConfig(),
+    ]).then(([mRes, cfg]) => {
+      setModels(mRes.data ?? []);
+      setCurrentModel(cfg.modelOverride ?? "");
+    }).catch(() => { setModelsErr(true); });
+  }, [isAdmin]);
+
+  useEffect(() => { loadModels(); }, [loadModels]);
+
+  async function handleModelChange(id: string) {
+    setCurrentModel(id);
+    try {
+      await api.setGatewayConfig({ modelOverride: id });
+    } catch { /* best-effort */ }
+  }
 
   useEffect(() => {
     const el = ref.current;
@@ -984,6 +1013,49 @@ function Composer({
         >
           📎
         </button>
+        {isAdmin && (
+          modelsErr ? (
+            <button
+              type="button"
+              onClick={loadModels}
+              title="Failed to load models — click to retry"
+              style={{
+                padding: "0.45rem 0.5rem",
+                borderRadius: 8,
+                background: "transparent",
+                border: "1px solid var(--danger, #ff6b6b)",
+                color: "var(--danger, #ff6b6b)",
+                fontSize: 12,
+                cursor: "pointer",
+              }}
+            >
+              ⚠ models
+            </button>
+          ) : (
+            <select
+              value={currentModel}
+              onChange={(e) => void handleModelChange(e.target.value)}
+              title="Switch model (admin)"
+              style={{
+                padding: "0.45rem 0.5rem",
+                borderRadius: 8,
+                background: "var(--bg-3, var(--bg-2))",
+                border: "1px solid var(--border)",
+                color: "var(--text-dim)",
+                fontSize: 12,
+                cursor: "pointer",
+                maxWidth: 170,
+              }}
+            >
+              <option value="">{models.length === 0 ? "Loading…" : "Default model"}</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name || m.id}
+                </option>
+              ))}
+            </select>
+          )
+        )}
         <textarea
           ref={ref}
           value={value}

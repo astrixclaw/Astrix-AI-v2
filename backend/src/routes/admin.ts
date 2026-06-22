@@ -97,28 +97,52 @@ export async function adminRoutes(app: FastifyInstance) {
     async (req) => redactGateway(setGatewayConfig(req.body ?? {})),
   );
 
-  // Proxy the gateway's /v1/models list so the renderer doesn't need the real token.
+  // Return the list of available models by reading the OpenClaw config directly.
+  // The gateway /v1/models endpoint only lists agent names, not the underlying LLMs.
   app.get(
     "/api/admin/gateway/models",
     { preHandler: requireAdmin },
     async (_req, reply) => {
-      const cfg = getGatewayConfig();
-      if (!cfg.url) {
-        return reply.status(503).send({ error: "gateway_not_configured" });
+      interface ModelEntry { id: string; name?: string }
+      interface ProviderConf { models?: ModelEntry[] }
+
+      // Built-in Anthropic models always available in OpenClaw
+      const builtins: ModelEntry[] = [
+        { id: "anthropic/claude-haiku-4-5", name: "Claude Haiku 4.5" },
+        { id: "anthropic/claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+        { id: "anthropic/claude-opus-4-6", name: "Claude Opus 4.6" },
+      ];
+
+      // Read provider models from OpenClaw config file
+      const configPaths = [
+        `${process.env.HOME}/.openclaw/openclaw.json`,
+        "/etc/openclaw/openclaw.json",
+      ];
+
+      let configModels: ModelEntry[] = [];
+      for (const p of configPaths) {
+        try {
+          const { readFileSync } = await import("node:fs");
+          const raw = JSON.parse(readFileSync(p, "utf8")) as {
+            models?: { providers?: Record<string, ProviderConf> };
+          };
+          const providers = raw?.models?.providers ?? {};
+          for (const [provider, conf] of Object.entries(providers)) {
+            for (const m of (conf.models ?? [])) {
+              configModels.push({
+                id: `${provider}/${m.id}`,
+                name: m.name || m.id,
+              });
+            }
+          }
+          break;
+        } catch {
+          // try next path
+        }
       }
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`;
-      let res: Response;
-      try {
-        res = await fetch(`${cfg.url.replace(/\/+$/, "")}/v1/models`, { headers });
-      } catch (e) {
-        return reply.status(502).send({ error: "gateway_unreachable" });
-      }
-      if (!res.ok) {
-        return reply.status(502).send({ error: `gateway_http_${res.status}` });
-      }
-      const data = await res.json();
-      return data;
+
+      const all = [...builtins, ...configModels];
+      return { object: "list", data: all.map((m) => ({ id: m.id, name: m.name, object: "model" })) };
     },
   );
 
