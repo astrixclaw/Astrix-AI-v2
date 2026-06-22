@@ -93,6 +93,9 @@ export async function* streamChatTurn(opts: {
     Accept: "text/event-stream",
   };
   if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`;
+  // Use x-openclaw-model header for model override — the `model` field must
+  // always be an agent target ("openclaw" or "openclaw/<agentId>").
+  if (cfg.modelOverride?.trim()) headers["x-openclaw-model"] = cfg.modelOverride.trim();
 
   let res: Response;
   try {
@@ -102,9 +105,8 @@ export async function* streamChatTurn(opts: {
         method: "POST",
         headers,
         body: JSON.stringify({
-          model: cfg.modelOverride?.trim()
-            ? cfg.modelOverride.trim()
-            : modelFor(opts.isAdmin ? (cfg.agent || "main") : (cfg.memberAgent || "lite")),
+          model: modelFor(opts.isAdmin ? (cfg.agent || "main") : (cfg.memberAgent || "lite")),
+
           messages,
           stream: true,
         }),
@@ -120,7 +122,15 @@ export async function* streamChatTurn(opts: {
 
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => "");
-    throw new GatewayError(res.status, body || `http_${res.status}`);
+    // Try to extract a human-readable message from the gateway's JSON error
+    // response (e.g. {"error":{"message":"..."}}) so the chat UI shows
+    // something useful instead of a raw JSON blob.
+    let msg = body || `http_${res.status}`;
+    try {
+      const parsed = JSON.parse(body) as { error?: { message?: string }; message?: string };
+      msg = parsed?.error?.message ?? parsed?.message ?? msg;
+    } catch { /* leave msg as raw body */ }
+    throw new GatewayError(res.status, msg);
   }
 
   // Parse SSE: blocks separated by blank lines; each line starts with `data:`.

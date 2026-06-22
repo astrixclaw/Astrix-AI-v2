@@ -52,7 +52,7 @@ export function getGatewayConfig(): GatewayConfig {
   return {
     url: getSetting(SETTING_KEYS.GATEWAY_URL),
     token: getSetting(SETTING_KEYS.GATEWAY_TOKEN),
-    agent: getSetting(SETTING_KEYS.GATEWAY_AGENT) || "default",
+    agent: getSetting(SETTING_KEYS.GATEWAY_AGENT) || "main",
     memberAgent: getSetting(SETTING_KEYS.GATEWAY_MEMBER_AGENT) || "lite",
     modelOverride: getSetting(SETTING_KEYS.GATEWAY_MODEL_OVERRIDE),
   };
